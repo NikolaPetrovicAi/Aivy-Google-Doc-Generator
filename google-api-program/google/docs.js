@@ -9,6 +9,8 @@ const OpenAI = require("openai");
 
 const { generatePlan } = require("./aiPlanner"); // ✅ OVO MORA POSTOJATI
 const { generatePage } = require("./aiWriter");  // ✅ OVO TAKOĐE
+const { markdownToGoogleDocsRequests } = require("./markdownTranslator.js");
+const { googleDocsToHtml } = require("./formatConverter.js");
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -96,6 +98,33 @@ router.get("/read", async (req, res) => {
   } catch (err) {
     console.error("❌ Greška pri čitanju dokumenta:", err);
     res.status(500).send("Nisam uspeo da pročitam dokument.");
+  }
+});
+
+// 📖 4️⃣ NEW: Read and convert a Google Doc to HTML for the editor
+router.get("/doc/:id", async (req, res) => {
+  const { id } = req.params;
+  if (!id) {
+    return res.status(400).json({ error: "Document ID is required." });
+  }
+
+  try {
+    const docs = google.docs({ version: "v1", auth: oauth2Client });
+    const response = await docs.documents.get({ documentId: id });
+
+    if (!response.data || !response.data.body || !response.data.body.content) {
+      return res.status(404).json({ error: "Document content not found." });
+    }
+
+    const htmlContent = googleDocsToHtml(response.data.body.content);
+
+    res.json({
+      title: response.data.title,
+      htmlContent: htmlContent,
+    });
+  } catch (err) {
+    console.error(`❌ Error reading and converting document ${id}:`, err);
+    res.status(500).send("Failed to read or convert document.");
   }
 });
 // ==========================
@@ -371,4 +400,62 @@ router.post("/generate-full-doc", async (req, res) => {
   }
 });
 
-module.exports = router;
+
+async function createGoogleDocFromPlan(plan, formData) {
+  const { topic, tone, language } = formData;
+  const docs = google.docs({ version: "v1", auth: oauth2Client });
+  const drive = google.drive({ version: "v3", auth: oauth2Client });
+
+  // 1. Create the document
+  console.log(`Creating document with title: ${topic}`);
+  const fileMetadata = {
+    name: topic || "Novi AI Dokument",
+    mimeType: "application/vnd.google-apps.document",
+  };
+  const file = await drive.files.create({
+    resource: fileMetadata,
+    fields: "id",
+  });
+  const documentId = file.data.id;
+  console.log(`✅ Document created with ID: ${documentId}`);
+
+  // 2. Generate content and requests for all pages
+  let allRequests = [];
+  let currentIndex = 1; // Start at the beginning of the document body
+
+  for (const page of plan) {
+    console.log(`📝 Generating content for page ${page.page}: ${page.title}`);
+    const pageContent = await generatePage({
+      page: page.page,
+      title: page.title,
+      summary: page.summary,
+      elements: page.elements,
+      tone: tone,
+      language: language,
+    });
+    
+    // Translate markdown to Google Docs requests
+    const { requests, endIndex } = markdownToGoogleDocsRequests(pageContent, currentIndex);
+    if (requests.length > 0) {
+      allRequests.push(...requests);
+      currentIndex = endIndex;
+    }
+  }
+
+  console.log("✍️ Writing content to Google Doc...");
+  // 3. Write the full content to the document using a single batch update
+  if (allRequests.length > 0) {
+    await docs.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: allRequests,
+      },
+    });
+  }
+
+  console.log("✅ Content written successfully.");
+  return documentId;
+}
+
+module.exports = { router, createGoogleDocFromPlan };
+

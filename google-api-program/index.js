@@ -1,12 +1,14 @@
 
 const cors = require("cors");
 // index.js
-require("dotenv").config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const express = require("express");
 const { google } = require("googleapis");
 const axios = require("axios");
 
-const docsRouter = require("./google/docs.js");
+const { router: docsRouter, createGoogleDocFromPlan } = require("./google/docs.js");
+const { generatePlan } = require("./google/aiPlanner.js");
 
 
 const app = express();
@@ -17,12 +19,47 @@ app.use("/docs", docsRouter);
 // Google Alati
 const sheetsRoutes = require("./google/sheets");
 app.use("/sheets", sheetsRoutes);
-const docsRoutes = require("./google/docs");
-app.use("/docs", docsRoutes);
-const driveRoutes = require("./google/drive");
+const { router: driveRoutes, getGoogleDocs } = require("./google/drive");
 app.use("/drive", driveRoutes);
 const gmailRoutes = require("./google/gmail");
 app.use("/gmail", gmailRoutes);
+
+app.get("/api/google-docs", async (req, res) => {
+  try {
+    const { nextPageToken } = req.query;
+    const { files, nextPageToken: newNextPageToken } = await getGoogleDocs(nextPageToken);
+    
+    // Rename 'files' to 'documents' to match frontend expectation
+    res.json({ documents: files, nextPageToken: newNextPageToken });
+
+  } catch (error) {
+    console.error("Error fetching google docs for frontend:", error);
+    // Send back an empty list on error to prevent frontend from crashing
+    res.status(500).json({ documents: [], nextPageToken: undefined, error: "Failed to fetch documents" });
+  }
+});
+
+app.post("/api/generate-plan", async (req, res) => {
+  try {
+    const plan = await generatePlan(req.body);
+    res.json(plan);
+  } catch (error) {
+    console.error("Error generating plan:", error);
+    res.status(500).json({ error: "Failed to generate plan" });
+  }
+});
+
+app.post("/api/create-google-doc", async (req, res) => {
+  try {
+    const { plan, formData } = req.body;
+    const documentId = await createGoogleDocFromPlan(plan, formData);
+    res.json({ documentId });
+  } catch (error) {
+    console.error("Error creating Google Doc:", error);
+    res.status(500).json({ error: "Failed to create Google Doc" });
+  }
+});
+
 
 
 

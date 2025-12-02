@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Merriweather, Lato, Montserrat } from "next/font/google";
 import "./globals.css";
 import Sidebar from "./components/Sidebar"; // Import the Sidebar component
 import Header from "./components/Header"; // Import the Header component
@@ -12,6 +13,24 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const merriweather = Merriweather({
+  weight: ["400", "700"],
+  subsets: ["latin"],
+  variable: "--font-merriweather",
+});
+
+const lato = Lato({
+  weight: ["400", "700"],
+  subsets: ["latin"],
+  variable: "--font-lato",
+});
+
+const montserrat = Montserrat({
+  weight: ["400", "700"],
+  subsets: ["latin"],
+  variable: "--font-montserrat",
 });
 
 export const metadata: Metadata = {
@@ -27,7 +46,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased flex h-screen bg-gray-100`}
+        className={`${geistSans.variable} ${geistMono.variable} ${merriweather.variable} ${lato.variable} ${montserrat.variable} antialiased flex h-screen bg-gray-100`}
       >
         {/* Sidebar */}
         <Sidebar />

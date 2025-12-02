@@ -23,6 +23,7 @@ export default function DocumentGrid({ documents, lastDocumentElementRef }: Docu
             <DocumentCard
               ref={lastDocumentElementRef}
               key={doc.id}
+              id={doc.id}
               title={doc.name}
               modifiedTime={doc.modifiedTime}
               mimeType={doc.mimeType}
@@ -33,6 +34,7 @@ export default function DocumentGrid({ documents, lastDocumentElementRef }: Docu
           return (
             <DocumentCard
               key={doc.id}
+              id={doc.id}
               title={doc.name}
               modifiedTime={doc.modifiedTime}
               mimeType={doc.mimeType}

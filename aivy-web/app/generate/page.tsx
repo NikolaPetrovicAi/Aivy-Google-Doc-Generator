@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useDebounce } from '../hooks/useDebounce';
 import PlanPreview from '../components/PlanPreview';
+import { fonts } from '../lib/fonts';
 
 // Define the types for the form state and the plan
 interface FormState {
@@ -11,6 +12,7 @@ interface FormState {
   pages: string; // Use string for select value
   language: string;
   detailLevel: 'Minimal' | 'Concise' | 'Detailed' | 'Extensive' | '';
+  font: string;
 }
 
 interface Plan {
@@ -28,9 +30,11 @@ export default function GenerateDocumentPage() {
     pages: '1',
     language: 'English',
     detailLevel: 'Detailed',
+    font: 'Lato',
   });
   const [plan, setPlan] = useState<Plan | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGeneratingDoc, setIsGeneratingDoc] = useState(false); // New state for doc generation
 
   const debouncedTopic = useDebounce(formState.topic, 750);
 
@@ -48,22 +52,63 @@ export default function GenerateDocumentPage() {
       setIsLoading(true);
       console.log("Generating plan for:", formState);
       
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+      try {
+        const response = await fetch('http://localhost:8080/api/generate-plan', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(formState),
+        });
 
-      const mockPlan: Plan = {
-        pages: Array.from({ length: parseInt(formState.pages) }, (_, i) => ({
-          page: i + 1,
-          title: `Page ${i + 1}: Title for ${formState.topic}`,
-          summary: `Summary for page ${i + 1} with ${formState.detailLevel} detail, in ${formState.language}.`,
-        })),
-      };
-      
-      setPlan(mockPlan);
-      setIsLoading(false);
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+
+        const data = await response.json();
+        setPlan(data.plan ? { pages: data.plan } : data);
+      } catch (error) {
+        console.error("Failed to generate plan:", error);
+        setPlan(null); // Clear plan on error
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     generatePlan();
-  }, [isSectionOneComplete, debouncedTopic, formState.pages, formState.language, formState.detailLevel, formState.docType]); // Add all relevant dependencies
+  }, [isSectionOneComplete, debouncedTopic, formState.pages, formState.language, formState.detailLevel, formState.docType, formState.font]);
+
+  // Function to handle the final document generation
+  const handleGenerateDocument = async () => {
+    if (!plan) return;
+
+    setIsGeneratingDoc(true);
+    try {
+      const response = await fetch('http://localhost:8080/api/create-google-doc', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ plan: plan.pages, formData: formState }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create Google Doc');
+      }
+
+      const { documentId } = await response.json();
+      if (documentId) {
+        window.open(`https://docs.google.com/document/d/${documentId}/edit`, '_blank');
+      }
+    } catch (error) {
+      console.error("Error creating document:", error);
+      // You might want to show an error message to the user here
+      alert(`Error: ${error instanceof Error ? error.message : "An unknown error occurred."}`);
+    } finally {
+      setIsGeneratingDoc(false);
+    }
+  };
 
   return (
     <div className="flex flex-grow bg-gray-50">
@@ -132,11 +177,21 @@ export default function GenerateDocumentPage() {
               </div>
             </div>
             <div className="space-y-3 transition-opacity group-disabled:opacity-40">
-              <p className="text-center font-medium text-gray-700">Theme</p>
-              <div className="flex justify-center space-x-4">
-                <button className="w-16 h-16 rounded-lg bg-gradient-to-br from-purple-400 to-indigo-500 shadow-md hover:opacity-90 transition-opacity"></button>
-                <button className="w-16 h-16 rounded-lg bg-gradient-to-br from-green-400 to-teal-500 shadow-md hover:opacity-90 transition-opacity"></button>
-                <button className="w-16 h-16 rounded-lg bg-gradient-to-br from-yellow-400 to-orange-500 shadow-md hover:opacity-90 transition-opacity"></button>
+              <p className="text-center font-medium text-gray-700">Font</p>
+              <div className="flex justify-center space-x-2">
+                {fonts.map((font) => (
+                  <button
+                    key={font.name}
+                    onClick={() => setFormState(s => ({ ...s, font: font.name }))}
+                    className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
+                      formState.font === font.name
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-100 border'
+                    }`}
+                  >
+                    <span className={font.className}>{font.name}</span>
+                  </button>
+                ))}
               </div>
             </div>
           </fieldset>
@@ -144,8 +199,30 @@ export default function GenerateDocumentPage() {
       </div>
 
       {/* Right Column: Plan Preview */}
-      <div className="w-1/2 p-6 bg-gray-100 overflow-y-auto">
-        <PlanPreview plan={plan} isLoading={isLoading} />
+      <div className="w-1/2 p-6 bg-gray-100 overflow-y-auto flex flex-col">
+        <PlanPreview plan={plan} isLoading={isLoading} fontName={formState.font} />
+
+        {plan && !isLoading && (
+          <div className="mt-6 text-center">
+            <button
+              onClick={handleGenerateDocument}
+              disabled={isGeneratingDoc}
+              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300"
+            >
+              {isGeneratingDoc ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Generating...
+                </>
+              ) : (
+                'Generate Document'
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

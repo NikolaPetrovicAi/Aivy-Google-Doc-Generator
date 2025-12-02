@@ -18,27 +18,24 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const observer = useRef<IntersectionObserver>();
 
-  const fetchDocuments = useCallback(async (token: string | null) => {
+  const fetchDocuments = useCallback(async (token?: string) => {
     setLoading(true);
     try {
-      const url = token
-        ? `http://localhost:8080/drive/list?pageToken=${token}`
-        : "http://localhost:8080/drive/list";
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.files) {
-        const formattedDocuments = data.files.map((file: any) => ({
-          id: file.id,
-          name: file.name,
-          modifiedTime: file.modifiedTime,
-          mimeType: file.mimeType,
-          preview: file.preview,
-        }));
-        setDocuments((prev) => [...prev, ...formattedDocuments]);
-        setNextPageToken(data.nextPageToken);
+      const url = `http://localhost:8080/api/google-docs?${token ? `nextPageToken=${token}` : ''}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+      const data = await response.json();
+      setDocuments(prevDocs => {
+        const fetchedDocs = Array.isArray(data.documents) ? data.documents : [];
+        const allDocs = token ? [...prevDocs, ...fetchedDocs] : fetchedDocs;
+        const uniqueDocs = Array.from(new Map(allDocs.map(doc => [doc.id, doc])).values());
+        return uniqueDocs;
+      });
+      setNextPageToken(data.nextPageToken);
     } catch (error) {
-      console.error("Error fetching documents:", error);
+      console.error("Failed to fetch documents:", error);
     } finally {
       setLoading(false);
     }

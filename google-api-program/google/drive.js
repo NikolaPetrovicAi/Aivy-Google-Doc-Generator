@@ -7,52 +7,57 @@ const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
 
+async function getGoogleDocs(pageToken) {
+  const drive = google.drive({ version: "v3", auth: oauth2Client });
+  const result = await drive.files.list({
+    q: "mimeType='application/vnd.google-apps.document'",
+    pageSize: 20,
+    fields: "nextPageToken, files(id, name, mimeType, modifiedTime, owners/emailAddress, thumbnailLink, hasThumbnail)",
+    pageToken: pageToken,
+  });
+
+  const cacheDir = path.join(__dirname, "..", "thumbnail_cache");
+  if (!fs.existsSync(cacheDir)) {
+    fs.mkdirSync(cacheDir);
+  }
+
+  const filesWithPreviews = await Promise.all(
+    result.data.files.map(async (file) => {
+      if (!file.hasThumbnail) {
+        return { ...file, preview: "No preview available" };
+      }
+
+      const modifiedTime = new Date(file.modifiedTime).getTime();
+      const cachedFileName = `${file.id}-${modifiedTime}.jpg`;
+      const cachedFilePath = path.join(cacheDir, cachedFileName);
+      const localPreviewPath = `http://localhost:8080/thumbnail_cache/${cachedFileName}`;
+
+      if (fs.existsSync(cachedFilePath)) {
+        return { ...file, preview: localPreviewPath };
+      } else {
+        const response = await axios.get(file.thumbnailLink, { responseType: "stream" });
+        const writer = fs.createWriteStream(cachedFilePath);
+        response.data.pipe(writer);
+
+        await new Promise((resolve, reject) => {
+          writer.on("finish", resolve);
+          writer.on("error", reject);
+        });
+
+        return { ...file, preview: localPreviewPath };
+      }
+    })
+  );
+
+  return { files: filesWithPreviews, nextPageToken: result.data.nextPageToken };
+}
+
 // 🔍 1. Lista fajlova
 router.get("/list", async (req, res) => {
-  const { pageToken } = req.query;
   try {
-    const drive = google.drive({ version: "v3", auth: oauth2Client });
-    const result = await drive.files.list({
-      q: "mimeType='application/vnd.google-apps.document'",
-      pageSize: 20,
-      fields: "nextPageToken, files(id, name, mimeType, modifiedTime, owners/emailAddress, thumbnailLink, hasThumbnail)",
-      pageToken: pageToken,
-    });
-
-    const cacheDir = path.join(__dirname, "..", "thumbnail_cache");
-    if (!fs.existsSync(cacheDir)) {
-      fs.mkdirSync(cacheDir);
-    }
-
-    const filesWithPreviews = await Promise.all(
-      result.data.files.map(async (file) => {
-        if (!file.hasThumbnail) {
-          return { ...file, preview: "No preview available" };
-        }
-
-        const modifiedTime = new Date(file.modifiedTime).getTime();
-        const cachedFileName = `${file.id}-${modifiedTime}.jpg`;
-        const cachedFilePath = path.join(cacheDir, cachedFileName);
-        const localPreviewPath = `http://localhost:8080/thumbnail_cache/${cachedFileName}`;
-
-        if (fs.existsSync(cachedFilePath)) {
-          return { ...file, preview: localPreviewPath };
-        } else {
-          const response = await axios.get(file.thumbnailLink, { responseType: "stream" });
-          const writer = fs.createWriteStream(cachedFilePath);
-          response.data.pipe(writer);
-
-          await new Promise((resolve, reject) => {
-            writer.on("finish", resolve);
-            writer.on("error", reject);
-          });
-
-          return { ...file, preview: localPreviewPath };
-        }
-      })
-    );
-
-    res.json({ status: "ok", files: filesWithPreviews, nextPageToken: result.data.nextPageToken });
+    const { pageToken } = req.query;
+    const data = await getGoogleDocs(pageToken);
+    res.json({ status: "ok", ...data });
   } catch (err) {
     console.error("❌ Greška pri listanju fajlova:", err);
     res.status(500).send("Nisam uspeo da učitam listu fajlova.");
@@ -113,4 +118,4 @@ router.patch("/rename", async (req, res) => {
   }
 });
 
-module.exports = router;
+module.exports = { router, getGoogleDocs };

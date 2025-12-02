@@ -9,6 +9,7 @@
 # Environment variables
 .env
 /google-api-program/.env
+google-api-program/google/tokens.json
 
 # Cache
 /google-api-program/thumbnail_cache
@@ -22,3 +23,5 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 /aivy-web/.next/logs/
+.gemini/
+gha-creds-*.json
