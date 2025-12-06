@@ -1,84 +1,131 @@
-# Aivy Workspace: AI-Powered Document Collaboration in Google Workspace
+# 🚀 Aivy Workspace  
+### AI-Powered Document Automation for Google Workspace
 
-Aivy Workspace is an intelligent, AI-powered productivity platform designed to streamline professional document creation and management. It is tightly integrated with Google Workspace (Docs, Drive, Calendar) and leverages the OpenAI API to help users generate and refine high-quality documents without extensive manual writing or formatting.
+Aivy Workspace is a modern AI-powered platform designed to automate the creation, formatting, and management of documents inside Google Workspace. It combines Google Docs/Drive integrations with OpenAI-powered content generation to deliver a seamless, end-to-end document workflow.
 
-This project was built to showcase a modern, full-stack application that solves a real-world problem: automating the tedious aspects of document creation. It demonstrates expertise in frontend and backend development, API integration, and building a seamless user experience.
-
-## Key Features
-
-*   **AI-Powered Document Generation**: Users can generate complete, multi-page documents by simply providing a topic, tone, desired length, and language. The AI handles the rest, from planning the structure to writing the content.
-*   **Dynamic Document Planning**: Before content is written, the AI generates a page-by-page plan (titles, summaries, key elements). Users can review and edit this plan, giving them full control over the final output.
-*   **Rich Text Editor & In-App Editing**: Generated documents are displayed in a beautiful, in-app rich-text editor (built with TipTap). This allows for a seamless editing experience without leaving the application.
-*   **Google Drive Integration**: The application authenticates with users' Google accounts (via OAuth 2.0) to browse, display, and manage their existing Google Docs. All newly generated documents are saved directly to the user's Google Drive.
-*   **Advanced Formatting**: The backend features a sophisticated translation layer that converts AI-generated Markdown into properly formatted Google Docs content, including headings, lists, and other styles.
-*   **Modern Frontend**: A responsive and intuitive user interface built with Next.js, React, and TypeScript, featuring infinite scrolling for document lists and real-time previews.
-
-## Tech Stack
-
-| Category      | Technologies                                                              |
-|---------------|---------------------------------------------------------------------------|
-| **Frontend**  | Next.js, React, TypeScript, Tailwind CSS, TipTap (Rich Text Editor)       |
-| **Backend**   | Node.js, Express.js                                                       |
-| **APIs**      | Google Workspace (Docs, Drive), OpenAI API                                |
-| **Auth**      | Google OAuth 2.0                                                          |
-
-## Getting Started
-
-### Prerequisites
-
-*   Node.js (v18 or later recommended)
-*   Google Cloud Platform project with OAuth 2.0 credentials
-*   OpenAI API key
-
-### Backend Setup (`google-api-program`)
-
-1.  **Navigate to the backend directory:**
-    ```bash
-    cd google-api-program
-    ```
-
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
-
-3.  **Create a `.env` file** in the `google-api-program` directory and add your API credentials:
-    ```
-    GOOGLE_CLIENT_ID=your_google_client_id
-    GOOGLE_CLIENT_SECRET=your_google_client_secret
-    GOOGLE_REDIRECT_URI=http://localhost:8080/auth/google/callback
-    OPENAI_API_KEY=your_openai_api_key
-    SESSION_SECRET=a_secure_random_string
-    ```
-
-4.  **Configure Google OAuth:** In your Google Cloud Console, ensure that `http://localhost:8080/auth/google/callback` is added to the "Authorized redirect URIs" for your OAuth 2.0 client.
-
-5.  **Start the backend server:**
-    ```bash
-    node index.js
-    ```
-    The server will run on `http://localhost:8080`.
-
-6.  **Authenticate with Google:** Open your browser and navigate to `http://localhost:8080/auth/google` to link your Google account.
-
-### Frontend Setup (`aivy-web`)
-
-1.  **Navigate to the frontend directory:**
-    ```bash
-    cd aivy-web
-    ```
-
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
-
-3.  **Start the frontend development server:**
-    ```bash
-    npm run dev
-    ```
-    The application will be available at `http://localhost:3000`.
+This project demonstrates my ability to build full-stack, production-ready features including OAuth authentication, cloud integrations, AI generation pipelines, and a professional frontend user experience.
 
 ---
 
-This project demonstrates a full-circle development process, from ideation and architectural design to implementation, debugging, and deployment readiness. It is a testament to building complex, AI-driven applications with a focus on user experience and robust backend services.
+## ⭐ Key Highlights (Recruiter-Friendly)
+
+- **Full AI writing pipeline** — from document planning to complete multi-page content generation.  
+- **Google Drive + Google Docs Integration** — browsing, reading, and creating Docs directly through the app.  
+- **Intelligent Markdown → Google Docs conversion** — headings, lists, structure, and formatting.  
+- **Professional UI/UX** — built with Next.js, React, Tailwind, and a TipTap rich-text editor.  
+- **Secure OAuth flow** — Google authentication with token/session management.  
+- **Real SaaS architecture** — clearly separated frontend/backend and consistent API design.
+
+---
+
+## 💡 What Aivy Workspace Does
+
+Aivy Workspace removes the manual work from document creation:
+
+1. The user enters a topic, tone, language, and length.  
+2. AI generates a **page-by-page document outline**.  
+3. The user edits or approves the structure.  
+4. AI generates a complete document with consistent style and tone.  
+5. The final formatted content is saved directly to **Google Drive**.  
+6. Users can edit the output through an in-app **rich text editor**.
+
+---
+
+## 🔧 Tech Stack Overview
+
+| Category | Technologies |
+|---------|--------------|
+| **Frontend** | Next.js, React, TypeScript, Tailwind CSS, TipTap Editor |
+| **Backend** | Node.js, Express.js |
+| **AI** | OpenAI API (content + outline generation) |
+| **Cloud & Auth** | Google OAuth 2.0, Google Docs API, Google Drive API |
+| **Other** | REST API architecture, cookie sessions, responsive UI design |
+
+---
+
+## 🧠 Core Features
+
+### 1. **AI Document Generator**  
+Generate fully written documents based on customizable inputs (topic, tone, length, etc.).
+
+### 2. **Dynamic AI Outline Planner**  
+AI produces a detailed page-by-page structure before writing begins.
+
+### 3. **Rich Text Editing Experience**  
+TipTap editor with clean formatting and live preview.
+
+### 4. **Google Drive Integration**  
+- Browse user files  
+- Display Google Docs  
+- Create new Docs with AI-generated content
+
+### 5. **Advanced Formatting Logic**  
+Backend engine translates AI Markdown into fully styled Google Docs elements.
+
+### 6. **Modern, Responsive Frontend**  
+Clean layout, fast rendering, and intuitive user experience.
+
+---
+
+## 🚀 Running the Project
+
+### Backend — `google-api-program`
+
+```bash
+cd google-api-program
+npm install
+```
+
+Create `.env`:
+
+```
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=http://localhost:8080/auth/google/callback
+OPENAI_API_KEY=...
+SESSION_SECRET=...
+```
+
+Start server:
+
+```bash
+node index.js
+```
+
+Authenticate:  
+`http://localhost:8080/auth/google`
+
+---
+
+### Frontend — `aivy-web`
+
+```bash
+cd aivy-web
+npm install
+npm run dev
+```
+
+Available at:  
+`http://localhost:3000`
+
+---
+
+## 🔮 Planned Improvements
+
+* **Full-Featured Editing Toolbar**  
+  Implement a complete WYSIWYG toolbar for the in-app editor, giving users advanced formatting options such as bold, italics, headings, lists, font styles, and colors.
+
+* **Real-Time Collaborative Editing**  
+  Add real-time collaboration so multiple users can edit the same document simultaneously, similar to Google Docs.
+
+* **In-Editor AI Assistant**  
+  Integrate contextual AI actions directly inside the editor. Users will be able to select text and apply actions like *Improve writing*, *Change tone*, *Summarize*, or *Check grammar*.
+
+* **Two-Way Sync with Google Docs**  
+  Upgrade from a one-direction “overwrite” model to full two-way synchronization. Any changes in Aivy Workspace would sync to Google Docs—and edits in Google Docs would sync back.
+
+* **Template Library**  
+  Create a library of ready-to-use document templates (resumes, reports, proposals, essays, etc.) to accelerate the document creation process.
+
+---
+
