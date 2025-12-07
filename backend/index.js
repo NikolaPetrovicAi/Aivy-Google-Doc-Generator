@@ -17,8 +17,8 @@ app.use(express.json());
 app.use("/thumbnail_cache", express.static("thumbnail_cache"));
 app.use("/docs", docsRouter);
 // Google Alati
-const sheetsRoutes = require("./google/sheets");
-app.use("/sheets", sheetsRoutes);
+const { sheetsRouter } = require("./google/sheets");
+app.use("/sheets", sheetsRouter);
 const { router: driveRoutes, getGoogleDocs } = require("./google/drive");
 app.use("/drive", driveRoutes);
 const gmailRoutes = require("./google/gmail");

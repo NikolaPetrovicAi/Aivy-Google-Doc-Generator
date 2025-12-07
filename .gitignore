@@ -1,18 +1,18 @@
 # Dependencies
 /node_modules
-/aivy-web/node_modules
-/google-api-program/node_modules
+/frontend/node_modules
+/backend/node_modules
 
 # Build artifacts
-/aivy-web/.next
+/frontend/.next
 
 # Environment variables
 .env
-/google-api-program/.env
-google-api-program/google/tokens.json
+/backend/.env
+backend/google/tokens.json
 
 # Cache
-/google-api-program/thumbnail_cache
+/backend/thumbnail_cache
 
 # OS-specific
 .DS_Store
@@ -25,3 +25,4 @@ yarn-error.log*
 /aivy-web/.next/logs/
 .gemini/
 gha-creds-*.json
+.github/

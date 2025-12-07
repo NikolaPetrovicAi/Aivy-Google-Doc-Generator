@@ -11,6 +11,7 @@ const { generatePlan } = require("./aiPlanner"); // ✅ OVO MORA POSTOJATI
 const { generatePage } = require("./aiWriter");  // ✅ OVO TAKOĐE
 const { markdownToGoogleDocsRequests } = require("./markdownTranslator.js");
 const { googleDocsToHtml } = require("./formatConverter.js");
+const { createSpreadsheet, writeData, getSheetInfo, addChart } = require("./sheets.js");
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -424,6 +425,83 @@ async function createGoogleDocFromPlan(plan, formData) {
   let currentIndex = 1; // Start at the beginning of the document body
 
   for (const page of plan) {
+    // Handle chart elements first
+    if (page.elements && Array.isArray(page.elements)) {
+      for (const element of page.elements) {
+        if (element.type === 'chart' && element.data && element.data.length > 1) {
+          console.log(`📊 Handling chart element: ${element.title}`);
+          try {
+            const sheetTitle = `[Chart Data] ${topic} - ${element.title || 'Chart'}`;
+            const spreadsheetId = await createSpreadsheet(sheetTitle);
+            if (!spreadsheetId) throw new Error("Failed to create spreadsheet for chart.");
+
+            const chartData = element.data;
+            const numRows = chartData.length;
+            const numCols = chartData[0] ? chartData[0].length : 0;
+            const range = `Sheet1!A1`;
+            await writeData(spreadsheetId, range, chartData);
+
+            const sheetInfos = await getSheetInfo(spreadsheetId);
+            if (!sheetInfos || sheetInfos.length === 0) throw new Error("Failed to get sheet info.");
+            const firstSheetId = sheetInfos[0].sheetId;
+
+            const chartId = await addChart(spreadsheetId, firstSheetId, element.chartType, numRows, numCols, element.title);
+            if (!chartId) throw new Error("Failed to add chart to the sheet.");
+            
+            // Insert chart title as a heading in the doc
+             const titleRequest = {
+              insertText: {
+                location: { index: currentIndex },
+                text: `${element.title}\n`,
+              },
+            };
+             const styleRequest = {
+                updateParagraphStyle: {
+                    range: {
+                        startIndex: currentIndex,
+                        endIndex: currentIndex + element.title.length,
+                    },
+                    paragraphStyle: {
+                        namedStyleType: "HEADING_2",
+                    },
+                    fields: "namedStyleType",
+                },
+            };
+
+
+            const chartRequest = {
+              insertInlineObject: {
+                location: { index: currentIndex + element.title.length + 1 },
+                embeddedObject: {
+                  sheetChart: {
+                    spreadsheetId: spreadsheetId,
+                    chartId: chartId,
+                  },
+                },
+                objectSize: {
+                  height: { magnitude: 300, unit: "PT" },
+                  width: { magnitude: 480, unit: "PT" },
+                },
+              },
+            };
+            
+            const newlineRequest = {
+              insertText: {
+                location: { index: currentIndex + element.title.length + 2},
+                text: '\n',
+              },
+            };
+
+            allRequests.push(titleRequest, styleRequest, chartRequest, newlineRequest);
+            currentIndex += element.title.length + 3;
+          } catch (err) {
+            console.error(`Greška pri kreiranju grafikona: ${err}`);
+            throw err; // Re-throw the error to be caught by the main handler
+          }
+        }
+      }
+    }
+
     console.log(`📝 Generating content for page ${page.page}: ${page.title}`);
     const pageContent = await generatePage({
       page: page.page,
@@ -458,4 +536,3 @@ async function createGoogleDocFromPlan(plan, formData) {
 }
 
 module.exports = { router, createGoogleDocFromPlan };
-
