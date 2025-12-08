@@ -7,7 +7,7 @@ This project demonstrates my ability to build full-stack, production-ready featu
 
 ---
 
-## ⭐ Key Highlights (Recruiter-Friendly)
+## ⭐ Key Highlights
 
 - **Full AI writing pipeline** — from document planning to complete multi-page content generation.  
 - **Google Drive + Google Docs Integration** — browsing, reading, and creating Docs directly through the app.  
