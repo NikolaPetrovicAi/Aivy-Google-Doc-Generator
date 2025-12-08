@@ -69,10 +69,10 @@ Clean layout, fast rendering, and intuitive user experience.
 
 ## 🚀 Running the Project
 
-### Backend — `google-api-program`
+### Backend
 
 ```bash
-cd google-api-program
+cd backend
 npm install
 ```
 
@@ -104,10 +104,10 @@ This will start the OAuth flow and give the app permission to read/create Google
 
 ---
 
-### Frontend — `aivy-web`
+### Frontend
 
 ```bash
-cd aivy-web
+cd frontend
 npm install
 npm run dev
 ```
