@@ -126,7 +126,8 @@ A guest mode will be added in the future, allowing users to try core AI features
 
 ---
 
-## 🔮 Planned Improvements
+## 🔮 Future Improvements
+
 
 * **Full-Featured Editing Toolbar**  
   Implement a complete WYSIWYG toolbar for the in-app editor, giving users advanced formatting options such as bold, italics, headings, lists, font styles, and colors.
