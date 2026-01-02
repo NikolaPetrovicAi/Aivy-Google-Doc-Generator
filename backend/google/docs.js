@@ -429,6 +429,7 @@ async function createGoogleDocFromPlan(plan, formData) {
   let currentIndex = 1; // Start at the beginning of the document body
 
   for (const page of plan) {
+    /*
     // Handle chart elements first
     if (page.elements && Array.isArray(page.elements)) {
       for (const element of page.elements) {
@@ -505,6 +506,7 @@ async function createGoogleDocFromPlan(plan, formData) {
         }
       }
     }
+    */
 
     console.log(`📝 Generišem stranu ${page.page}: ${page.title}`);
     const pageContent = await generatePage({
