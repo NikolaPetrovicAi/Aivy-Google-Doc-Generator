@@ -66,6 +66,10 @@ export default function DocEditorPage() {
     setSaveMessage(null); // Clear save message on update
   }, []);
 
+  const handleFocus = useCallback((editor: Editor) => {
+    setActiveEditor(editor);
+  }, []);
+
   const handleSaveDocument = useCallback(async () => {
     if (!id) return;
 
@@ -141,8 +145,9 @@ export default function DocEditorPage() {
             >
               <RichTextEditor
                 content={pageContent}
-                onUpdate={(newHtml) => handleUpdatePageContent(index, newHtml)}
-                onFocus={(editor) => setActiveEditor(editor)} // Set the active editor on focus
+                index={index}
+                onPageUpdate={handleUpdatePageContent}
+                onFocus={handleFocus} // Set the active editor on focus
               />
             </div>
           ))}

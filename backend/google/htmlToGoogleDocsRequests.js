@@ -1,5 +1,41 @@
 const { JSDOM } = require('jsdom');
 
+/**
+ * Parses a color string (either hex or rgb) and returns a Google Docs RGB object.
+ * @param {string} colorString The color string (e.g., "#ff0000" or "rgb(255, 0, 0)").
+ * @returns {object|null} A Google Docs RGB object or null if parsing fails.
+ */
+function parseColor(colorString) {
+    if (!colorString) return null;
+
+    // Handle RGB or RGBA strings: "rgb(255, 0, 0)"
+    const rgbMatch = colorString.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+    if (rgbMatch) {
+        return {
+            red: parseInt(rgbMatch[1], 10) / 255,
+            green: parseInt(rgbMatch[2], 10) / 255,
+            blue: parseInt(rgbMatch[3], 10) / 255,
+        };
+    }
+
+    // Handle hex strings
+    let hex = colorString;
+    const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+    hex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
+
+    const hexMatch = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (hexMatch) {
+        return {
+            red: parseInt(hexMatch[1], 16) / 255,
+            green: parseInt(hexMatch[2], 16) / 255,
+            blue: parseInt(hexMatch[3], 16) / 255,
+        };
+    }
+
+    return null;
+}
+
+
 function htmlToGoogleDocsRequests(htmlContent, startIndex = 1) {
     const dom = new JSDOM(htmlContent);
     const body = dom.window.document.body;
@@ -8,23 +44,43 @@ function htmlToGoogleDocsRequests(htmlContent, startIndex = 1) {
 
     const listStack = [];
 
-    // This function now receives the full style object and constructs a comprehensive request.
     function applyTextStyle(startIndex, endIndex, textStyle) {
-        if (startIndex >= endIndex) return;
+        if (startIndex >= endIndex || !textStyle || Object.keys(textStyle).length === 0) return;
 
-        // Explicitly define all style properties to be set or unset.
-        const comprehensiveTextStyle = {
-            bold: textStyle.bold || false,
-            italic: textStyle.italic || false,
-            underline: textStyle.underline || false,
-        };
+        const styleToApply = {};
+        const fields = [];
+
+        // Reset fields
+        if (textStyle.bold === false) { fields.push('bold'); }
+        if (textStyle.italic === false) { fields.push('italic'); }
+        if (textStyle.underline === false) { fields.push('underline'); }
+        if (textStyle.strikethrough === false) { fields.push('strikethrough'); }
+
+        // Set fields
+        if (textStyle.bold) { styleToApply.bold = true; fields.push('bold'); }
+        if (textStyle.italic) { styleToApply.italic = true; fields.push('italic'); }
+        if (textStyle.underline) { styleToApply.underline = true; fields.push('underline'); }
+        if (textStyle.strikethrough) { styleToApply.strikethrough = true; fields.push('strikethrough'); }
+        
+        if (textStyle.foregroundColor) {
+            styleToApply.foregroundColor = { color: { rgbColor: textStyle.foregroundColor } };
+            fields.push('foregroundColor');
+        }
+         if (textStyle.backgroundColor) {
+            styleToApply.backgroundColor = { color: { rgbColor: textStyle.backgroundColor } };
+            fields.push('backgroundColor');
+        }
+
+        if (fields.length === 0) return;
+        
+        // Remove duplicates from fields
+        const uniqueFields = [...new Set(fields)];
 
         requests.push({
             updateTextStyle: {
                 range: { startIndex: startIndex, endIndex: endIndex },
-                textStyle: comprehensiveTextStyle,
-                // Explicitly list all fields to ensure styles are reset correctly.
-                fields: 'bold,italic,underline',
+                textStyle: styleToApply,
+                fields: uniqueFields.join(','),
             },
         });
     }
@@ -42,7 +98,7 @@ function htmlToGoogleDocsRequests(htmlContent, startIndex = 1) {
         }
     }
 
-    function traverseAndConvert(node, currentInlineStyles = {}) {
+    function traverseAndConvert(node, inheritedStyles = {}) {
         if (node.nodeType === dom.window.Node.TEXT_NODE) {
             const text = node.textContent;
             if (text.length > 0) {
@@ -54,105 +110,81 @@ function htmlToGoogleDocsRequests(htmlContent, startIndex = 1) {
                     },
                 });
                 absoluteIndex += text.length;
-                
-                // Always apply the full style, even if it's just to set everything to false.
-                applyTextStyle(textStart, absoluteIndex, currentInlineStyles);
+                applyTextStyle(textStart, absoluteIndex, inheritedStyles);
             }
         } else if (node.nodeType === dom.window.Node.ELEMENT_NODE) {
             const tagName = node.tagName.toLowerCase();
             let paragraphContentStart = absoluteIndex;
             
-            // Create a new style object for the current scope.
-            let newInlineStyles = { ...currentInlineStyles };
+            let currentStyles = { ...inheritedStyles };
 
-            // Modify the style for the current tag.
+            // Apply styles from the current node
             switch (tagName) {
-                case 'strong': case 'b':
-                    newInlineStyles.bold = true;
+                case 'strong': case 'b': currentStyles.bold = true; break;
+                case 'em': case 'i': currentStyles.italic = true; break;
+                case 'u': currentStyles.underline = true; break;
+                case 's': case 'strike': case 'del': currentStyles.strikethrough = true; break;
+                case 'span':
+                    if (node.style.color) {
+                        currentStyles.foregroundColor = parseColor(node.style.color);
+                    }
                     break;
-                case 'em': case 'i':
-                    newInlineStyles.italic = true;
-                    break;
-                case 'u':
-                    newInlineStyles.underline = true;
+                case 'mark':
+                     if (node.style.backgroundColor) {
+                        currentStyles.backgroundColor = parseColor(node.style.backgroundColor);
+                    }
                     break;
             }
+            
+             if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'li', 'ul', 'ol'].includes(tagName)) {
+                const isList = ['ul', 'ol'].includes(tagName);
+                const isListItem = tagName === 'li';
 
-            // This block handles all child nodes with the calculated style.
-            if (['strong', 'b', 'em', 'i', 'u'].includes(tagName)) {
-                 node.childNodes.forEach(child => traverseAndConvert(child, newInlineStyles));
-                 return; // Return after processing children of inline elements
-            }
+                if(isList) listStack.push({ type: tagName, level: listStack.length });
+                
+                const childrenStyles = isListItem ? currentStyles : {};
+                node.childNodes.forEach(child => traverseAndConvert(child, childrenStyles));
 
+                if(isList) listStack.pop();
 
-            // This block handles block-level elements
-            switch (tagName) {
-                case 'h1': case 'h2': case 'h3': case 'h4': case 'h5': case 'h6': case 'p': {
-                    node.childNodes.forEach(child => traverseAndConvert(child, {})); // Pass empty style for children of block elements
-                    
-                    if (absoluteIndex > paragraphContentStart) {
-                        requests.push({ insertText: { location: { index: absoluteIndex }, text: '\n' } });
-                        absoluteIndex++;
-                    }
-
-                    if (tagName.startsWith('h')) {
-                        const style = { namedStyleType: `HEADING_${tagName[1]}` };
-                        applyParagraphStyle(paragraphContentStart, absoluteIndex, style);
-                    }
-                    break;
+                if (absoluteIndex > paragraphContentStart || (isListItem && node.textContent.trim().length > 0) ) {
+                    requests.push({ insertText: { location: { index: absoluteIndex }, text: '\n' } });
+                    absoluteIndex++;
                 }
-                case 'ul': case 'ol': {
-                    listStack.push({ type: tagName, level: listStack.length });
-                    node.childNodes.forEach(child => traverseAndConvert(child, {}));
-                    listStack.pop();
-                    break;
-                }
-                case 'li': {
-                    const listItemStart = absoluteIndex;
-                    node.childNodes.forEach(child => traverseAndConvert(child, {}));
-                    if (absoluteIndex > listItemStart) {
-                        requests.push({ insertText: { location: { index: absoluteIndex }, text: '\n' } });
-                        absoluteIndex++;
-                    }
 
-                    if (listStack.length > 0) {
-                        const currentList = listStack[listStack.length - 1];
+                const paraStyle = {};
+                if (tagName.startsWith('h')) paraStyle.namedStyleType = `HEADING_${tagName[1]}`;
+                
+                const alignment = node.style.textAlign;
+                if (alignment) {
+                    switch (alignment.toLowerCase()) {
+                        case 'center': paraStyle.alignment = 'CENTER'; break;
+                        case 'right': paraStyle.alignment = 'END'; break;
+                        case 'left': paraStyle.alignment = 'START'; break;
+                    }
+                }
+                 if(isListItem && listStack.length > 0){
+                      const currentList = listStack[listStack.length - 1];
                         requests.push({
                             createParagraphBullets: {
-                                range: { startIndex: listItemStart, endIndex: absoluteIndex },
+                                range: { startIndex: paragraphContentStart, endIndex: absoluteIndex },
                                 bulletPreset: currentList.type === 'ul' ? 'BULLET_DISC_CIRCLE_SQUARE' : 'NUMBERED_DECIMAL_ALPHA_ROMAN',
                             }
                         });
                         if (currentList.level > 0) {
-                           applyParagraphStyle(listItemStart, absoluteIndex, {
-                             indentStart: { magnitude: 36 * (currentList.level + 1), unit: 'PT' },
-                             indentFirstLine: { magnitude: 18 * (currentList.level + 1), unit: 'PT' },
-                           });
+                           paraStyle.indentStart = { magnitude: 36 * (currentList.level), unit: 'PT' };
                         }
-                    }
-                    break;
-                }
-                default: {
-                    node.childNodes.forEach(child => traverseAndConvert(child, {}));
-                    if (absoluteIndex > paragraphContentStart) {
-                        requests.push({ insertText: { location: { index: absoluteIndex }, text: '\n' } });
-                        absoluteIndex++;
-                    }
-                    break;
-                }
+                 }
+
+                applyParagraphStyle(paragraphContentStart, absoluteIndex, paraStyle);
+                
+            } else {
+                 node.childNodes.forEach(child => traverseAndConvert(child, currentStyles));
             }
         }
     }
 
-    // Start traversal with default styles off.
-    traverseAndConvert(body, { bold: false, italic: false, underline: false });
-
-    // The final return logic might need adjustment if body itself is traversed differently
-    const lastRequest = requests[requests.length - 1];
-    if (requests.length > 0 && absoluteIndex > startIndex && lastRequest.insertText?.text !== '\n') {
-         requests.push({ insertText: { location: { index: absoluteIndex }, text: '\n' } });
-        absoluteIndex++;
-    }
+    traverseAndConvert(body, {});
 
     return { requests, endIndex: absoluteIndex };
 }
