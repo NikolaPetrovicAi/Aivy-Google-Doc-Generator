@@ -27,3 +27,4 @@ yarn-error.log*
 gha-creds-*.json
 .github/
 GEMINI.md
+notes
