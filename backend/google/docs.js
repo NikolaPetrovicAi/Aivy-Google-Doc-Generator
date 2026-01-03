@@ -11,6 +11,7 @@ const { generatePlan } = require("./aiPlanner"); // ✅ OVO MORA POSTOJATI
 const { generatePage } = require("./aiWriter");  // ✅ OVO TAKOĐE
 const { markdownToGoogleDocsRequests } = require("./markdownTranslator.js");
 const { googleDocsToHtml } = require("./formatConverter.js");
+const { htmlToGoogleDocsRequests } = require("./htmlToGoogleDocsRequests.js"); // NEW
 const { createSpreadsheet, writeData, getSheetInfo, addChart } = require("./sheets.js");
 
 const openai = new OpenAI({
@@ -35,7 +36,7 @@ router.post("/create", async (req, res) => {
 
     res.json({
       status: "ok",
-      message: `Novi dokument "${file.data.name}" kreiran.`,
+      message: `Novi dokument "${file.data.name}" kreiran.`, 
       documentId: file.data.id
     });
   } catch (err) {
@@ -128,9 +129,9 @@ router.get("/doc/:id", async (req, res) => {
     res.status(500).send("Failed to read or convert document.");
   }
 });
-// ==========================
+// ========================== 
 // 📄 AI DOCUMENT GENERATOR
-// ==========================
+// ========================== 
 router.post("/generate-doc", async (req, res) => {
   try {
     const {
@@ -173,7 +174,9 @@ Na osnovu ovih informacija generiši sadržaj koji:
 - ima dužinu primerenu traženom broju stranica,
 - i koristi Markdown format (# Naslov, ## Podnaslov, - Liste, | Tabele, > Citat) kako bi ga sistem mogao prikazati u Preview modu.
 
-Ako dokument zahteva više strana, koristi oznaku \`---PAGE BREAK---\` da označiš prelaz između stranica.
+Ako dokument zahteva više strana, koristi oznaku 
+--PAGE BREAK--
+ da označiš prelaz između stranica.
 `;
 
     const userPrompt = `
@@ -190,7 +193,9 @@ Reference uključiti: ${reference ? "da" : "ne"}
 Broj željenih stranica: ${pages || 3}
 
 Zadatak: kreiraj smislen, profesionalan dokument koji reflektuje ove parametre.
-Formatiraj ga u Markdown stilu (#, ##, -, |, >, itd.), a ako je duži od jedne strane, ubaci \`---PAGE BREAK---\`.
+Formatiraj ga u Markdown stilu (#, ##, -, |, >, itd.), a ako je duži od jedne strane, ubaci 
+--PAGE BREAK--
+.
 `;
 
     const completion = await openai.chat.completions.create({
@@ -297,8 +302,7 @@ Održavaj kontekst dokumenta, ton: ${tone}, jezik: ${language}.
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: "Ti si AI pisac dokumenata koji dopunjava postojeće sekcije." },
+      messages: [ { role: "system", content: "Ti si AI pisac dokumenata koji dopunjava postojeće sekcije." },
         { role: "user", content: prompt },
       ],
       max_tokens: 500,
@@ -425,6 +429,7 @@ async function createGoogleDocFromPlan(plan, formData) {
   let currentIndex = 1; // Start at the beginning of the document body
 
   for (const page of plan) {
+    /*
     // Handle chart elements first
     if (page.elements && Array.isArray(page.elements)) {
       for (const element of page.elements) {
@@ -501,8 +506,9 @@ async function createGoogleDocFromPlan(plan, formData) {
         }
       }
     }
+    */
 
-    console.log(`📝 Generating content for page ${page.page}: ${page.title}`);
+    console.log(`📝 Generišem stranu ${page.page}: ${page.title}`);
     const pageContent = await generatePage({
       page: page.page,
       title: page.title,
@@ -535,4 +541,87 @@ async function createGoogleDocFromPlan(plan, formData) {
   return documentId;
 }
 
-module.exports = { router, createGoogleDocFromPlan };
+async function updateGoogleDocContent(documentId, htmlContent, title) {
+  const docs = google.docs({ version: "v1", auth: oauth2Client });
+   // === Get all requests from the HTML converter ===
+   const { requests: allRequests } = htmlToGoogleDocsRequests(htmlContent, 1);
+
+     // === Separate requests into text and styling ===
+     const textRequests = allRequests.filter(req => req.insertText);
+     const stylingRequests = allRequests.filter(req => !req.insertText);
+  
+     // === Start with a deletion request ===
+     let initialRequests = [];
+     const currentDoc = await docs.documents.get({ documentId });
+     if (currentDoc.data.body.content && currentDoc.data.body.content.length > 1) {
+       const lastElement = currentDoc.data.body.content[currentDoc.data.body.content.length - 1];
+       if (lastElement.endIndex) {
+         initialRequests.push({
+           deleteContentRange: { range: { startIndex: 1, endIndex: lastElement.endIndex - 1 } },
+         });
+       }
+     }
+  
+     // Add title update if needed
+     if (title && title !== currentDoc.data.title) {
+       initialRequests.push({
+         updateDocumentProperties: { properties: { title }, fields: 'title' },
+       });
+     }
+  
+     // === DIAGNOSTIC LOGGING ===
+     console.log("====== GOOGLE DOCS STYLING PAYLOAD ======");
+     stylingRequests.forEach(req => {
+       if (req.updateTextStyle) {
+         console.log(JSON.stringify(req.updateTextStyle, null, 2));
+       }
+     });
+     console.log("========================================");
+  
+  
+     // === EXECUTE BATCHES IN ORDER ===
+  
+     // 1. First, execute deletion and text insertion
+     const finalInsertRequests = [...initialRequests, ...textRequests];
+     if (finalInsertRequests.length > 0) {
+      console.log("Executing text insertion batch...");
+       await docs.documents.batchUpdate({
+         documentId,
+        requestBody: { requests: finalInsertRequests },
+       });
+     }
+  
+     // 2. Second, execute all styling requests
+     if (stylingRequests.length > 0) {
+       console.log("Executing styling batch...");
+       await docs.documents.batchUpdate({
+         documentId,
+         requestBody: { requests: stylingRequests },
+       });
+     }
+  
+     console.log(`✅ Document ${documentId} updated successfully in two steps.`);
+  
+}
+
+
+router.post("/save-document/:id", async (req, res) => {
+  const { id } = req.params;
+  const { htmlContent, title } = req.body;
+
+  if (!id || !htmlContent) {
+    return res.status(400).json({ error: "Document ID and HTML content are required." });
+  }
+
+  try {
+    await updateGoogleDocContent(id, htmlContent, title);
+    res.json({ status: "ok", message: "Document saved successfully." });
+  } catch (err) {
+    console.error("❌ Greška pri čuvanju dokumenta:", err);
+    // Send back a more detailed error message to the frontend
+    const message = err.errors?.[0]?.message || err.message || "An unknown error occurred on the backend.";
+    res.status(500).json({ message });
+  }
+});
+
+module.exports = { router, createGoogleDocFromPlan, updateGoogleDocContent };

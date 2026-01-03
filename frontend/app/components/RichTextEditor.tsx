@@ -1,25 +1,43 @@
-// aivy-web/app/components/RichTextEditor.tsx
-'use client';
-
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import React from 'react';
-import EditorToolbar from './EditorToolbar';
+import React, { useEffect } from 'react';
 
-// Define a simple component for the TipTap editor
-const RichTextEditor = ({ content }: { content: string }) => {
+interface RichTextEditorProps {
+  content: string;
+  onUpdate: (html: string) => void;
+  onFocus: (editor: Editor) => void; // Prop to notify parent with editor instance
+  editable?: boolean;
+}
+
+const RichTextEditor = ({
+  content,
+  onUpdate,
+  onFocus,
+  editable = true,
+}: RichTextEditorProps) => {
   const editor = useEditor({
     extensions: [StarterKit],
     content: content,
-    editable: true, // We'll make it editable for now
+    editable,
+    onUpdate: ({ editor }) => {
+      onUpdate(editor.getHTML());
+    },
+    onFocus: ({ editor }) => {
+      onFocus(editor); // Pass the editor instance up on focus
+    },
   });
 
+  // Effect to update editor content when the `content` prop changes,
+  // but only if the editor is not focused, to avoid disrupting user input.
+  useEffect(() => {
+    if (editor && !editor.isFocused && content !== editor.getHTML()) {
+      editor.commands.setContent(content, false, { preserveCursor: true });
+    }
+  }, [content, editor]);
+
   return (
-    <div>
-      <EditorToolbar editor={editor} />
-      <div className="prose dark:prose-invert max-w-none prose-sm sm:prose-base lg:prose-lg xl:prose-2xl m-5 focus:outline-none">
-        <EditorContent editor={editor} />
-      </div>
+    <div className="prose dark:prose-invert max-w-none flex-grow overflow-y-auto p-4">
+      <EditorContent editor={editor} />
     </div>
   );
 };

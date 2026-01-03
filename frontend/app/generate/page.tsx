@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation'; // Import the router
 import { useDebounce } from '../hooks/useDebounce';
 import PlanPreview from '../components/PlanPreview';
 import { fonts } from '../lib/fonts';
@@ -24,6 +25,7 @@ interface Plan {
 }
 
 export default function GenerateDocumentPage() {
+  const router = useRouter(); // Instantiate the router
   const [formState, setFormState] = useState<FormState>({
     docType: '',
     topic: '',
@@ -99,7 +101,7 @@ export default function GenerateDocumentPage() {
 
       const { documentId } = await response.json();
       if (documentId) {
-        window.open(`https://docs.google.com/document/d/${documentId}/edit`, '_blank');
+        router.push(`/doc/${documentId}`); // Navigate to the internal editor
       }
     } catch (error) {
       console.error("Error creating document:", error);

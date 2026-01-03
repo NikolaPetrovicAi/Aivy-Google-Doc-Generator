@@ -56,7 +56,7 @@ app.post("/api/create-google-doc", async (req, res) => {
     res.json({ documentId });
   } catch (error) {
     console.error("Error creating Google Doc:", error);
-    res.status(500).json({ error: "Failed to create Google Doc" });
+    res.status(500).json({ error: `Failed to create Google Doc. Reason: ${error.message}` });
   }
 });
 
