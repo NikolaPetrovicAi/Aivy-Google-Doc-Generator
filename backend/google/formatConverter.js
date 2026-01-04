@@ -1,29 +1,70 @@
 // google-api-program/google/formatConverter.js
 
+/**
+ * Extracts a CSS color string from a Google Docs Color object.
+ * @param {object} colorObj The Color object from the Google Docs API.
+ * @returns {string|null} A CSS color string (e.g., "rgb(255, 0, 0)") or null.
+ */
+function getColor(colorObj) {
+  // The API response shows we are getting rgbColor, so we focus only on that.
+  if (!colorObj?.rgbColor) return null;
+
+  const rgb = colorObj.rgbColor;
+  
+  // Convert Google's 0-1 scale to standard 0-255.
+  const r = Math.round((rgb.red || 0) * 255);
+  const g = Math.round((rgb.green || 0) * 255);
+  const b = Math.round((rgb.blue || 0) * 255);
+
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+
 function processTextRun(element) {
   let text = element.textRun.content;
   
-  // Replace tabs with spaces and trim lines
-  text = text.replace(/\t/g, ' ').replace(/\v/g, '\n').trim();
+  // Replace vertical tabs with newlines, but preserve other whitespace
+  text = text.replace(/\v/g, '\n');
 
-  if (!text.trim()) return '';
+  if (!text) return ''; // Return if the content is empty after processing
 
   const textStyle = element.textRun.textStyle;
+  let styledText = text;
+
   if (textStyle) {
     if (textStyle.bold) {
-      text = `<strong>${text}</strong>`;
+      styledText = `<strong>${styledText}</strong>`;
     }
     if (textStyle.italic) {
-      text = `<em>${text}</em>`;
+      styledText = `<em>${styledText}</em>`;
     }
     if (textStyle.underline) {
-      text = `<u>${text}</u>`;
+      styledText = `<u>${styledText}</u>`;
     }
     if (textStyle.strikethrough) {
-      text = `<s>${text}</s>`;
+      styledText = `<s>${styledText}</s>`;
+    }
+
+    let styles = [];
+    
+    // Handle foreground color
+    const textColor = getColor(textStyle.foregroundColor?.color);
+    if (textColor) {
+      styles.push(`color: ${textColor}`);
+    }
+
+    // Handle background color
+    const backgroundColor = getColor(textStyle.backgroundColor?.color);
+    if (backgroundColor) {
+      styles.push(`background-color: ${backgroundColor}`);
+    }
+
+    if (styles.length > 0) {
+      styledText = `<span style="${styles.join('; ')}">${styledText}</span>`;
     }
   }
-  return text;
+
+  return styledText;
 }
 
 function googleDocsToHtml(content) {

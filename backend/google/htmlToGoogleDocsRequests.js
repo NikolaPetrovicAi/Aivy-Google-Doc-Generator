@@ -128,9 +128,7 @@ function htmlToGoogleDocsRequests(htmlContent, startIndex = 1) {
                     if (node.style.color) {
                         currentStyles.foregroundColor = parseColor(node.style.color);
                     }
-                    break;
-                case 'mark':
-                     if (node.style.backgroundColor) {
+                    if (node.style.backgroundColor) {
                         currentStyles.backgroundColor = parseColor(node.style.backgroundColor);
                     }
                     break;

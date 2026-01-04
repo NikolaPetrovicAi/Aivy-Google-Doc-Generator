@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import RichTextEditor from '@/app/components/RichTextEditor';
 import EditorToolbar from '@/app/components/EditorToolbar';
 import { Editor } from '@tiptap/react';
@@ -14,7 +14,7 @@ export default function DocEditorPage() {
   const { id } = params;
 
   const [title, setTitle] = useState('Loading...');
-  const [editablePages, setEditablePages] = useState<string[]>(['']);
+  const [editablePages, setEditablePages] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -22,6 +22,9 @@ export default function DocEditorPage() {
 
   // State to hold the currently focused editor instance
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
+  const editorRefs = useRef<(Editor | null)[]>([]);
+  const initialFocusDone = useRef(false);
+
 
   // Function to dynamically measure content height and paginate
   const paginateContent = useCallback((htmlContent: string): string[] => {
@@ -56,6 +59,23 @@ export default function DocEditorPage() {
 
     fetchDocument();
   }, [id, paginateContent]);
+
+  // Effect to focus the first editor when content is loaded
+  useEffect(() => {
+    if (!isLoading && editablePages.length > 0 && editorRefs.current[0] && !initialFocusDone.current) {
+      const timer = setTimeout(() => {
+        editorRefs.current[0]?.commands.focus();
+        initialFocusDone.current = true; // Ensure this only runs once
+      }, 100); // A small delay to ensure the editor is fully rendered
+
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, editablePages]);
+
+
+  const handleEditorReady = (index: number, editor: Editor | null) => {
+    editorRefs.current[index] = editor;
+  };
 
   const handleUpdatePageContent = useCallback((index: number, newHtml: string) => {
     setEditablePages(prevPages => {
@@ -148,6 +168,7 @@ export default function DocEditorPage() {
                 index={index}
                 onPageUpdate={handleUpdatePageContent}
                 onFocus={handleFocus} // Set the active editor on focus
+                onEditorReady={(editor) => handleEditorReady(index, editor)}
               />
             </div>
           ))}

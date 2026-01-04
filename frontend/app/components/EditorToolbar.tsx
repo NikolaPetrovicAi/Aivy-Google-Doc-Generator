@@ -1,5 +1,5 @@
 import { Editor } from '@tiptap/react';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useDebounce } from '../hooks/useDebounce';
 
 interface EditorToolbarProps {
@@ -15,6 +15,70 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, onSave, isSaving 
   const debouncedTextColor = useDebounce(textColor, 500);
   const debouncedHighlightColor = useDebounce(highlightColor, 500);
 
+  // Function to convert rgb/rgba to hex. Handles passthrough of hex colors.
+  const toHex = (colorStr: string): string => {
+    if (colorStr.startsWith('#')) {
+      return colorStr;
+    }
+    const match = colorStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    if (!match) {
+      return '#000000'; // Default to black on parse error
+    }
+    const [, r, g, b] = match.map(Number);
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toLowerCase();
+  };
+
+
+  // Function to update color swatches based on editor state
+  const updateColorSwatches = useCallback(() => {
+    if (!editor) return;
+    const { from, to, empty } = editor.state.selection;
+
+    let textColor: string | undefined = undefined;
+    let highlightColor: string | undefined = undefined;
+
+    if (empty) { // It's a cursor
+      const marks = editor.getAttributes('textStyle');
+      textColor = marks.color;
+      highlightColor = marks.backgroundColor;
+    } else { // It's a selection
+      const textColors = new Set<string>();
+      const highlightColors = new Set<string>();
+
+      editor.state.doc.nodesBetween(from, to, (node) => {
+        if (node.isText) {
+          node.marks.forEach((mark) => {
+            if (mark.type.name === 'textStyle') {
+              if (mark.attrs.color) {
+                textColors.add(mark.attrs.color);
+              }
+              if (mark.attrs.backgroundColor) {
+                highlightColors.add(mark.attrs.backgroundColor);
+              }
+            }
+          });
+        }
+      });
+
+      if (textColors.size === 1) {
+        textColor = textColors.values().next().value;
+      }
+      if (highlightColors.size === 1) {
+        highlightColor = highlightColors.values().next().value;
+      }
+    }
+    
+    // Convert to hex before setting state for the color input
+    const finalTextColor = textColor ? toHex(textColor) : '#000000';
+    const finalHighlightColor = highlightColor ? toHex(highlightColor) : '#ffffff';
+
+    setTextColor(finalTextColor);
+    // For highlight, if the color is white, we might want to show white, but if it's undefined, also white.
+    // The input doesn't support transparency, so we just use white.
+    setHighlightColor(finalHighlightColor === '#ffffff' ? '#ffffff' : finalHighlightColor);
+
+  }, [editor]);
+
   // Effect to apply text color once debounced
   useEffect(() => {
     if (editor && debouncedTextColor) {
@@ -25,31 +89,38 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, onSave, isSaving 
   // Effect to apply highlight color once debounced
   useEffect(() => {
     if (editor && debouncedHighlightColor) {
-      // Using toggleHighlight to apply or remove highlight
-      editor.chain().focus().toggleHighlight({ color: debouncedHighlightColor }).run();
+      // Set the background color using the 'textStyle' mark
+      editor.chain().focus().setMark('textStyle', { backgroundColor: debouncedHighlightColor }).run();
     }
   }, [debouncedHighlightColor, editor]);
 
-  // Update local state from editor when selection changes
+  // Update swatches on selection or content change
   useEffect(() => {
     if (editor) {
-      const updateColors = () => {
-        setTextColor(editor.getAttributes('textStyle').color || '#000000');
-        setHighlightColor(editor.getAttributes('highlight').color || '#ffffff');
+      const handleInitialUpdate = () => {
+        updateColorSwatches();
+        // Remove this listener so it only runs once after the first content update
+        editor.off('update', handleInitialUpdate);
       };
-      editor.on('selectionUpdate', updateColors);
+
+      // Listen for the first update, which happens after initial content is set
+      editor.on('update', handleInitialUpdate);
+      // Still listen for selection changes for subsequent user actions
+      editor.on('selectionUpdate', updateColorSwatches);
+      
       return () => {
-        editor.off('selectionUpdate', updateColors);
+        editor.off('update', handleInitialUpdate);
+        editor.off('selectionUpdate', updateColorSwatches);
       };
     }
-  }, [editor]);
+  }, [editor, updateColorSwatches]);
 
 
-  const getButtonClass = (isActive: boolean) => {
+  const getButtonClass = useCallback((isActive: boolean) => {
     return `px-3 py-1 rounded-md text-sm font-medium ${
       isActive ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed'
     }`;
-  };
+  }, []);
 
   if (!editor) {
     // Render a disabled-like state or nothing if the editor is not available
@@ -129,7 +200,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, onSave, isSaving 
           className="w-8 h-8 p-0 border-none rounded-md cursor-pointer"
           title="Set highlight color"
         />
-        <button onClick={() => editor.chain().focus().unsetHighlight().run()} className={getButtonClass(false)}>
+        <button onClick={() => editor.chain().focus().setMark('textStyle', { backgroundColor: null }).run()} className={getButtonClass(false)}>
           x
         </button>
       </div>
