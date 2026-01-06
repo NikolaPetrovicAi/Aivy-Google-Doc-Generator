@@ -1,102 +1,81 @@
-// google-api-program/google/formatConverter.js
-
-/**
- * Extracts a CSS color string from a Google Docs Color object.
- * @param {object} colorObj The Color object from the Google Docs API.
- * @returns {string|null} A CSS color string (e.g., "rgb(255, 0, 0)") or null.
- */
-function getColor(colorObj) {
-  // The API response shows we are getting rgbColor, so we focus only on that.
-  if (!colorObj?.rgbColor) return null;
-
-  const rgb = colorObj.rgbColor;
-  
-  // Convert Google's 0-1 scale to standard 0-255.
-  const r = Math.round((rgb.red || 0) * 255);
-  const g = Math.round((rgb.green || 0) * 255);
-  const b = Math.round((rgb.blue || 0) * 255);
-
-  return `rgb(${r}, ${g}, ${b})`;
-}
-
-
 function processTextRun(element) {
+  if (!element.textRun || !element.textRun.content) {
+    return '';
+  }
   let text = element.textRun.content;
   
-  // Replace vertical tabs with newlines, but preserve other whitespace
-  text = text.replace(/\v/g, '\n');
-
-  if (!text) return ''; // Return if the content is empty after processing
-
-  const textStyle = element.textRun.textStyle;
-  let styledText = text;
-
-  if (textStyle) {
-    if (textStyle.bold) {
-      styledText = `<strong>${styledText}</strong>`;
-    }
-    if (textStyle.italic) {
-      styledText = `<em>${styledText}</em>`;
-    }
-    if (textStyle.underline) {
-      styledText = `<u>${styledText}</u>`;
-    }
-    if (textStyle.strikethrough) {
-      styledText = `<s>${styledText}</s>`;
-    }
-
-    let styles = [];
-    
-    // Handle foreground color
-    const textColor = getColor(textStyle.foregroundColor?.color);
-    if (textColor) {
-      styles.push(`color: ${textColor}`);
-    }
-
-    // Handle background color
-    const backgroundColor = getColor(textStyle.backgroundColor?.color);
-    if (backgroundColor) {
-      styles.push(`background-color: ${backgroundColor}`);
-    }
-
-    if (styles.length > 0) {
-      styledText = `<span style="${styles.join('; ')}">${styledText}</span>`;
-    }
+  if (text === '\n') {
+    return ''; // Paragraph breaks are handled by the parent function
   }
 
-  return styledText;
+  const textStyle = element.textRun.textStyle;
+  if (textStyle) {
+    if (textStyle.strikethrough) text = `<s>${text}</s>`;
+    if (textStyle.italic) text = `<em>${text}</em>`;
+    if (textStyle.bold) text = `<strong>${text}</strong>`;
+  }
+  return text;
 }
 
+
 function googleDocsToHtml(content) {
+  if (!content) return '';
+
   let html = '';
   let inList = false;
 
-  for (const item of content) {
+  for (let i = 0; i < content.length; i++) {
+    const item = content[i];
+
     if (item.paragraph) {
       const paragraph = item.paragraph;
-      const styleType = paragraph.paragraphStyle?.namedStyleType || 'NORMAL_TEXT';
-      
-      const isListItem = !!paragraph.bullet;
+      const elements = paragraph.elements || [];
 
-      // Close list if the current paragraph is not a list item
-      if (inList && !isListItem) {
-        html += '</ul>';
-        inList = false;
+      // Check if the paragraph is effectively empty (contains only whitespace or newline characters)
+      const fullText = elements.map(el => el.textRun?.content || '').join('');
+      const isBlankLine = fullText.trim() === '';
+
+      // **THE FIX**: If this is the last element in the document, and it's a blank line, skip it.
+      // Google Docs often adds a final empty paragraph that we don't want to convert.
+      if (i === content.length - 1 && isBlankLine) {
+        continue;
       }
 
-      // Start a new list if the current paragraph is a list item and we're not in one
-      if (isListItem && !inList) {
-        html += '<ul>';
-        inList = true;
+      if (isBlankLine) {
+        if(inList) {
+            html += '</ul>';
+            inList = false;
+        }
+        html += `<p><br></p>`;
+        continue;
       }
 
       let innerHtml = (paragraph.elements || []).map(processTextRun).join('');
+      
+      // Remove trailing newline if it's from paragraph termination in Google Docs.
+      // HTML <p> tags implicitly handle line breaks, so explicit \n is redundant.
+      if (innerHtml.endsWith('\n')) {
+        innerHtml = innerHtml.slice(0, -1);
+      }
+      // Replace any remaining internal vertical tabs (soft breaks) with <br> tags for HTML
+      innerHtml = innerHtml.replace(/\v/g, '<br>');
 
-      if (!innerHtml.trim()) continue; // Skip empty paragraphs
-
+      const styleType = paragraph.paragraphStyle?.namedStyleType || 'NORMAL_TEXT';
+      const isListItem = !!paragraph.bullet;
+      
+      if (!inList && isListItem) {
+          html += `<ul>`;
+          inList = true;
+      }
+      if (inList && !isListItem) {
+          html += `</ul>`;
+          inList = false;
+      }
+      
       if (isListItem) {
-        html += `<li>${innerHtml}</li>`;
-      } else if (styleType.startsWith('HEADING_')) {
+        html += `<li><p>${innerHtml}</p></li>`;
+      }
+      else if (styleType.startsWith('HEADING_')) {
         const level = styleType.split('_')[1];
         html += `<h${level}>${innerHtml}</h${level}>`;
       } else {
@@ -105,12 +84,11 @@ function googleDocsToHtml(content) {
     }
   }
 
-  // Close any open list at the end
   if (inList) {
-    html += '</ul>';
+    html += `</ul>`;
   }
 
-  return html;
+  return html.trim();
 }
 
 module.exports = { googleDocsToHtml };

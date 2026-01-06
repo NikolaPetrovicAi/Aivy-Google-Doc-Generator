@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Merriweather, Lato, Montserrat } from "next/font/google";
 import "./globals.css";
-import Sidebar from "./components/Sidebar"; // Import the Sidebar component
-import Header from "./components/Header"; // Import the Header component
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -46,14 +44,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${merriweather.variable} ${lato.variable} ${montserrat.variable} antialiased flex h-screen bg-gray-100`}
+        className={`${geistSans.variable} ${geistMono.variable} ${merriweather.variable} ${lato.variable} ${montserrat.variable} antialiased h-screen bg-gray-100`}
       >
-        {/* Sidebar */}
-        <Sidebar />
-
         {/* Main content area */}
         <div className="flex-1 flex flex-col">
-          <Header /> {/* Place the Header component here */}
           {children}
         </div>
       </body>

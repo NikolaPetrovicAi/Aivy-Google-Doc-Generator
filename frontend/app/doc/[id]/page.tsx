@@ -2,6 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import Link from 'next/link'; // Import Link
 import RichTextEditor from '@/app/components/RichTextEditor';
 import EditorToolbar from '@/app/components/EditorToolbar';
 import { Editor } from '@tiptap/react';
@@ -19,11 +20,13 @@ export default function DocEditorPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
 
   // State to hold the currently focused editor instance
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
   const editorRefs = useRef<(Editor | null)[]>([]);
   const initialFocusDone = useRef(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
 
   // Function to dynamically measure content height and paginate
@@ -71,7 +74,14 @@ export default function DocEditorPage() {
       return () => clearTimeout(timer);
     }
   }, [isLoading, editablePages]);
-
+  
+  // Effect to focus the title input when it appears
+  useEffect(() => {
+    if (isEditingTitle && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [isEditingTitle]);
 
   const handleEditorReady = (index: number, editor: Editor | null) => {
     editorRefs.current[index] = editor;
@@ -122,58 +132,91 @@ export default function DocEditorPage() {
     }
   }, [id, editablePages, title]);
 
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      setIsEditingTitle(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col items-center w-full p-4 sm:p-8 bg-gray-50 dark:bg-gray-900">
-      {/* Header section for Toolbar and Title */}
-      <div className="w-full max-w-4xl mb-4">
-        <div className="flex flex-col items-center gap-4">
-          {/* Centralized toolbar is always visible, centered */}
-          <EditorToolbar editor={activeEditor} onSave={handleSaveDocument} isSaving={isSaving} />
-          
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full bg-transparent text-center text-3xl md:text-4xl font-bold focus:outline-none p-2 dark:text-white"
-            placeholder="Document Title"
-          />
-
-          {saveMessage && (
-            <div
-              className={`w-full text-center p-2 rounded-md text-sm ${
-                saveMessage.startsWith('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-              }`}
-              role="alert"
-            >
-              {saveMessage}
+    <div className="flex flex-col w-full h-screen bg-gray-50 dark:bg-gray-900">
+      {/* New Document Header */}
+      <header className="flex-shrink-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 shadow-sm">
+        <div className="flex items-center justify-between p-2 sm:p-3">
+          <div className="flex items-center min-w-0">
+            <Link href="/" className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </Link>
+            <div className="ml-2 min-w-0">
+              {isEditingTitle ? (
+                <input
+                  ref={titleInputRef}
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onBlur={() => setIsEditingTitle(false)}
+                  onKeyDown={handleTitleKeyDown}
+                  className="text-lg font-semibold text-gray-800 dark:text-white bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500 rounded-md px-2"
+                />
+              ) : (
+                <span
+                  onClick={() => setIsEditingTitle(true)}
+                  className="text-lg font-semibold text-gray-800 dark:text-white truncate cursor-pointer rounded-md px-2 py-1"
+                >
+                  {title}
+                </span>
+              )}
             </div>
-          )}
+          </div>
         </div>
+      </header>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col items-center w-full p-4 sm:p-8 overflow-y-auto">
+        {/* Header section for Toolbar and Title */}
+        <div className="w-full max-w-4xl mb-4">
+          <div className="flex flex-col items-center gap-4">
+            {/* Centralized toolbar is always visible, centered */}
+            <EditorToolbar editor={activeEditor} onSave={handleSaveDocument} isSaving={isSaving} />
+
+            {saveMessage && (
+              <div
+                className={`w-full text-center p-2 rounded-md text-sm ${
+                  saveMessage.startsWith('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                }`}
+                role="alert"
+              >
+                {saveMessage}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {isLoading && <p className="p-4 text-gray-500">Loading document...</p>}
+        {error && <p className="p-4 text-red-500">Error: {error}</p>}
+
+        {!isLoading && !error && (
+          <div className="flex-grow w-full">
+            {editablePages.map((pageContent, index) => (
+              <div
+                key={index}
+                className="paginated-editor bg-white shadow-md mx-auto mb-6 p-8 relative dark:bg-gray-800 border dark:border-gray-700"
+                style={{ minHeight: `${A4_HEIGHT_PX}px`, width: '210mm' }} // A4 width
+              >
+                <RichTextEditor
+                  content={pageContent}
+                  index={index}
+                  onPageUpdate={handleUpdatePageContent}
+                  onFocus={handleFocus} // Set the active editor on focus
+                  onEditorReady={(editor) => handleEditorReady(index, editor)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-
-
-      {isLoading && <p className="p-4 text-gray-500">Loading document...</p>}
-      {error && <p className="p-4 text-red-500">Error: {error}</p>}
-
-      {!isLoading && !error && (
-        <div className="flex-grow overflow-y-auto w-full">
-          {editablePages.map((pageContent, index) => (
-            <div
-              key={index}
-              className="paginated-editor bg-white shadow-md mx-auto mb-6 p-8 relative dark:bg-gray-800 border dark:border-gray-700"
-              style={{ minHeight: `${A4_HEIGHT_PX}px`, width: '210mm' }} // A4 width
-            >
-              <RichTextEditor
-                content={pageContent}
-                index={index}
-                onPageUpdate={handleUpdatePageContent}
-                onFocus={handleFocus} // Set the active editor on focus
-                onEditorReady={(editor) => handleEditorReady(index, editor)}
-              />
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

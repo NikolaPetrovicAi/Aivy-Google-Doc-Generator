@@ -1,190 +1,252 @@
 const { JSDOM } = require('jsdom');
 
-/**
- * Parses a color string (either hex or rgb) and returns a Google Docs RGB object.
- * @param {string} colorString The color string (e.g., "#ff0000" or "rgb(255, 0, 0)").
- * @returns {object|null} A Google Docs RGB object or null if parsing fails.
- */
-function parseColor(colorString) {
-    if (!colorString) return null;
-
-    // Handle RGB or RGBA strings: "rgb(255, 0, 0)"
-    const rgbMatch = colorString.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
-    if (rgbMatch) {
-        return {
-            red: parseInt(rgbMatch[1], 10) / 255,
-            green: parseInt(rgbMatch[2], 10) / 255,
-            blue: parseInt(rgbMatch[3], 10) / 255,
-        };
+// Helper to determine the bullet preset based on nesting level
+function getBulletPreset(level) {
+    switch (level % 3) {
+        case 0: return 'BULLET_DISC_CIRCLE_SQUARE'; // Level 1, 4, 7...
+        case 1: return 'BULLET_ARROW_DIAMOND_DISC'; // Level 2, 5, 8...
+        case 2: return 'BULLET_STAR_ARROW_DIAMOND'; // Level 3, 6, 9...
+        default: return 'BULLET_DISC_CIRCLE_SQUARE';
     }
-
-    // Handle hex strings
-    let hex = colorString;
-    const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
-    hex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
-
-    const hexMatch = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    if (hexMatch) {
-        return {
-            red: parseInt(hexMatch[1], 16) / 255,
-            green: parseInt(hexMatch[2], 16) / 255,
-            blue: parseInt(hexMatch[3], 16) / 255,
-        };
-    }
-
-    return null;
 }
 
+// Helper to recursively get all block-level nodes in document order
+function getBlockLevelNodes(rootNode, currentListLevel = 0) {
+    let nodes = [];
+    // Iterate over child elements only
+    for (const childElement of rootNode.children) {
+        const tagName = childElement.tagName.toLowerCase();
+        if (['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
+            nodes.push({ node: childElement, isListItem: false, listLevel: 0 });
+        } else if (tagName === 'ul' || tagName === 'ol') {
+            // For UL/OL, recurse and increase list level
+            nodes.push(...getBlockLevelNodes(childElement, currentListLevel + 1));
+        } else if (tagName === 'li') {
+            // List item itself
+            nodes.push({ node: childElement, isListItem: true, listLevel: currentListLevel });
+        }
+        // Add other block-level elements as needed
+    }
+    return nodes;
+}
 
-function htmlToGoogleDocsRequests(htmlContent, startIndex = 1) {
-    const dom = new JSDOM(htmlContent);
+function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
+    const dom = new JSDOM(`<body>${htmlContent}</body>`);
     const body = dom.window.document.body;
-    const requests = [];
-    let absoluteIndex = startIndex;
+    let accumulatedRequests = []; // To store all requests before sorting
+    let currentTextIndex = baseStartIndex;
+    let paragraphsInfo = []; // Stores { text: string, styles: [], isListItem: boolean, listLevel: number } for each block
 
-    const listStack = [];
-
-    function applyTextStyle(startIndex, endIndex, textStyle) {
-        if (startIndex >= endIndex || !textStyle || Object.keys(textStyle).length === 0) return;
-
-        const styleToApply = {};
-        const fields = [];
-
-        // Reset fields
-        if (textStyle.bold === false) { fields.push('bold'); }
-        if (textStyle.italic === false) { fields.push('italic'); }
-        if (textStyle.underline === false) { fields.push('underline'); }
-        if (textStyle.strikethrough === false) { fields.push('strikethrough'); }
-
-        // Set fields
-        if (textStyle.bold) { styleToApply.bold = true; fields.push('bold'); }
-        if (textStyle.italic) { styleToApply.italic = true; fields.push('italic'); }
-        if (textStyle.underline) { styleToApply.underline = true; fields.push('underline'); }
-        if (textStyle.strikethrough) { styleToApply.strikethrough = true; fields.push('strikethrough'); }
-        
-        if (textStyle.foregroundColor) {
-            styleToApply.foregroundColor = { color: { rgbColor: textStyle.foregroundColor } };
-            fields.push('foregroundColor');
-        }
-         if (textStyle.backgroundColor) {
-            styleToApply.backgroundColor = { color: { rgbColor: textStyle.backgroundColor } };
-            fields.push('backgroundColor');
+    // First pass: Extract text and style info from HTML, calculate relative indices
+    // This pass does NOT generate API requests yet, only collects structured data
+    function traverseAndExtract(node, currentStyles = {}) {
+        if (node.nodeType === dom.window.Node.TEXT_NODE) {
+            return [{
+                type: 'text',
+                content: node.textContent,
+                styles: { ...currentStyles },
+            }];
         }
 
-        if (fields.length === 0) return;
-        
-        // Remove duplicates from fields
-        const uniqueFields = [...new Set(fields)];
+        if (node.nodeType === dom.window.Node.ELEMENT_NODE) {
+            const tagName = node.tagName.toLowerCase();
+            let newStyles = { ...currentStyles };
+            let childResults = [];
 
-        requests.push({
-            updateTextStyle: {
-                range: { startIndex: startIndex, endIndex: endIndex },
-                textStyle: styleToApply,
-                fields: uniqueFields.join(','),
-            },
-        });
+            switch (tagName) {
+                case 'strong': case 'b': newStyles.bold = true; break;
+                case 'em': case 'i': newStyles.italic = true; break;
+                case 's': newStyles.strikethrough = true; break;
+                // Add more inline style processing as needed (e.g., u, s, span with style)
+                case 'br': // Handle <br> tags as soft newlines with a vertical tab '\v'
+                    return [{ type: 'text', content: '\v', styles: { ...currentStyles } }];
+            }
+
+            // For UL/OL, don't directly process children's content here, getBlockLevelNodes handles it
+            // If it's a list container or item, its children will be processed as part of block-level nodes or inline content
+            for (const child of node.childNodes) {
+                childResults.push(...traverseAndExtract(child, newStyles));
+            }
+            return childResults;
+        }
+        return [];
     }
 
-    function applyParagraphStyle(startIndex, endIndex, style) {
-         if (startIndex < endIndex && Object.keys(style).length > 0) {
-            const fields = Object.keys(style).join(',');
-            requests.push({
-                updateParagraphStyle: {
-                    range: { startIndex: startIndex, endIndex: endIndex },
-                    paragraphStyle: style,
-                    fields: fields,
-                },
+    // Get all block-level nodes in correct document order
+    const allBlockNodes = getBlockLevelNodes(body);
+
+    for (const blockInfo of allBlockNodes) {
+        const blockNode = blockInfo.node;
+        const isListItem = blockInfo.isListItem;
+        const listLevel = blockInfo.listLevel;
+
+        const contentNodes = traverseAndExtract(blockNode, {});
+        
+        let plainText = '';
+        let inlineStyleSpans = []; // Stores { text, styles, startIndex, endIndex }
+
+        // Aggregate text and styles for the current block
+        for (const item of contentNodes) {
+            if (item.type === 'text' && item.content !== undefined) {
+                const start = plainText.length;
+                plainText += item.content;
+                const end = plainText.length;
+
+                if (Object.keys(item.styles).length > 0) {
+                    inlineStyleSpans.push({
+                        styles: item.styles,
+                        relativeStartIndex: start,
+                        relativeEndIndex: end,
+                    });
+                }
+            }
+        }
+
+        // Handle empty paragraphs or list items carefully to ensure single newlines
+        if (plainText.trim() === '' && !isListItem) {
+            paragraphsInfo.push({
+                text: '\n', // Represents an empty paragraph in Google Docs
+                inlineStyles: [],
+                isListItem: false,
+                listLevel: 0
+            });
+        } else {
+            // Remove the leadingTabs logic, as tabs in text are not the correct way to handle indentation.
+            // The API handles indentation via paragraph style updates.
+            paragraphsInfo.push({
+                text: plainText + '\n',
+                inlineStyles: inlineStyleSpans,
+                isListItem: isListItem,
+                listLevel: listLevel,
+                tagName: blockNode.tagName.toLowerCase(), // Store the tag name
             });
         }
     }
 
-    function traverseAndConvert(node, inheritedStyles = {}) {
-        if (node.nodeType === dom.window.Node.TEXT_NODE) {
-            const text = node.textContent;
-            if (text.length > 0) {
-                const textStart = absoluteIndex;
-                requests.push({
-                    insertText: {
-                        location: { index: absoluteIndex },
-                        text: text,
+    // Second pass: Generate API requests with absolute indices
+    let currentAbsoluteIndex = baseStartIndex;
+    let requestsToProcess = [];
+
+    // Process paragraphs in their original order first to get text insertion requests
+    for (const paraInfo of paragraphsInfo) {
+        const insertionStartIndex = currentAbsoluteIndex;
+        
+        // Insert the paragraph text
+        requestsToProcess.push({
+            type: 'insertText',
+            request: {
+                insertText: {
+                    location: { index: currentAbsoluteIndex },
+                    text: paraInfo.text,
+                }
+            },
+            absoluteIndex: currentAbsoluteIndex // Store for sorting
+        });
+        currentAbsoluteIndex += paraInfo.text.length;
+
+        // Add inline style requests for this paragraph
+        for (const span of paraInfo.inlineStyles) {
+            requestsToProcess.push({
+                type: 'updateTextStyle',
+                request: {
+                    updateTextStyle: {
+                        range: {
+                            startIndex: insertionStartIndex + span.relativeStartIndex,
+                            endIndex: insertionStartIndex + span.relativeEndIndex,
+                        },
+                        textStyle: span.styles,
+                        fields: Object.keys(span.styles).join(','),
+                    }
+                },
+                absoluteIndex: insertionStartIndex + span.relativeStartIndex // Store for sorting
+            });
+        }
+
+        // Add paragraph style request for headings
+        if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(paraInfo.tagName)) {
+            const level = paraInfo.tagName.substring(1);
+            requestsToProcess.push({
+                type: 'updateParagraphStyle',
+                request: {
+                    updateParagraphStyle: {
+                        range: {
+                            startIndex: insertionStartIndex,
+                            endIndex: insertionStartIndex + paraInfo.text.length,
+                        },
+                        paragraphStyle: {
+                            namedStyleType: `HEADING_${level}`,
+                        },
+                        fields: 'namedStyleType',
+                    }
+                },
+                absoluteIndex: insertionStartIndex,
+            });
+        }
+
+        // Add bullet request for list items
+        if (paraInfo.isListItem) {
+            requestsToProcess.push({
+                type: 'createParagraphBullets',
+                request: {
+                    createParagraphBullets: {
+                        range: {
+                            startIndex: insertionStartIndex,
+                            endIndex: insertionStartIndex + paraInfo.text.length,
+                        },
+                        bulletPreset: getBulletPreset(paraInfo.listLevel),
+                    }
+                },
+                absoluteIndex: insertionStartIndex // Store for sorting
+            });
+
+            // Correctly handle nesting by setting indentation on the paragraph
+            if (paraInfo.listLevel > 0) {
+                requestsToProcess.push({
+                    type: 'updateParagraphStyle',
+                    request: {
+                        updateParagraphStyle: {
+                            range: {
+                                startIndex: insertionStartIndex,
+                                endIndex: insertionStartIndex + paraInfo.text.length,
+                            },
+                            paragraphStyle: {
+                                // Indent by 36 points per level. Standard indentation.
+                                indentStart: { magnitude: 36 * paraInfo.listLevel, unit: 'PT' },
+                            },
+                            fields: 'indentStart',
+                        },
                     },
+                    absoluteIndex: insertionStartIndex,
                 });
-                absoluteIndex += text.length;
-                applyTextStyle(textStart, absoluteIndex, inheritedStyles);
-            }
-        } else if (node.nodeType === dom.window.Node.ELEMENT_NODE) {
-            const tagName = node.tagName.toLowerCase();
-            let paragraphContentStart = absoluteIndex;
-            
-            let currentStyles = { ...inheritedStyles };
-
-            // Apply styles from the current node
-            switch (tagName) {
-                case 'strong': case 'b': currentStyles.bold = true; break;
-                case 'em': case 'i': currentStyles.italic = true; break;
-                case 'u': currentStyles.underline = true; break;
-                case 's': case 'strike': case 'del': currentStyles.strikethrough = true; break;
-                case 'span':
-                    if (node.style.color) {
-                        currentStyles.foregroundColor = parseColor(node.style.color);
-                    }
-                    if (node.style.backgroundColor) {
-                        currentStyles.backgroundColor = parseColor(node.style.backgroundColor);
-                    }
-                    break;
-            }
-            
-             if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'li', 'ul', 'ol'].includes(tagName)) {
-                const isList = ['ul', 'ol'].includes(tagName);
-                const isListItem = tagName === 'li';
-
-                if(isList) listStack.push({ type: tagName, level: listStack.length });
-                
-                const childrenStyles = isListItem ? currentStyles : {};
-                node.childNodes.forEach(child => traverseAndConvert(child, childrenStyles));
-
-                if(isList) listStack.pop();
-
-                if (absoluteIndex > paragraphContentStart || (isListItem && node.textContent.trim().length > 0) ) {
-                    requests.push({ insertText: { location: { index: absoluteIndex }, text: '\n' } });
-                    absoluteIndex++;
-                }
-
-                const paraStyle = {};
-                if (tagName.startsWith('h')) paraStyle.namedStyleType = `HEADING_${tagName[1]}`;
-                
-                const alignment = node.style.textAlign;
-                if (alignment) {
-                    switch (alignment.toLowerCase()) {
-                        case 'center': paraStyle.alignment = 'CENTER'; break;
-                        case 'right': paraStyle.alignment = 'END'; break;
-                        case 'left': paraStyle.alignment = 'START'; break;
-                    }
-                }
-                 if(isListItem && listStack.length > 0){
-                      const currentList = listStack[listStack.length - 1];
-                        requests.push({
-                            createParagraphBullets: {
-                                range: { startIndex: paragraphContentStart, endIndex: absoluteIndex },
-                                bulletPreset: currentList.type === 'ul' ? 'BULLET_DISC_CIRCLE_SQUARE' : 'NUMBERED_DECIMAL_ALPHA_ROMAN',
-                            }
-                        });
-                        if (currentList.level > 0) {
-                           paraStyle.indentStart = { magnitude: 36 * (currentList.level), unit: 'PT' };
-                        }
-                 }
-
-                applyParagraphStyle(paragraphContentStart, absoluteIndex, paraStyle);
-                
-            } else {
-                 node.childNodes.forEach(child => traverseAndConvert(child, currentStyles));
             }
         }
     }
 
-    traverseAndConvert(body, {});
+    // Separate structural requests from stylistic requests
+    let structuralRequests = [];
+    let stylisticRequests = [];
 
-    return { requests, endIndex: absoluteIndex };
+    for (const req of requestsToProcess) {
+        if (req.type === 'insertText' || req.type === 'deleteContentRange') { // Add other structural types if needed
+            structuralRequests.push(req);
+        } else {
+            stylisticRequests.push(req);
+        }
+    }
+
+    // Sort structural requests by absoluteIndex in ASCENDING order for sequential insertions
+    structuralRequests.sort((a, b) => a.absoluteIndex - b.absoluteIndex);
+
+    // Sort stylistic requests by absoluteIndex in ASCENDING order
+    // (They operate on content that is already there or is about to be inserted by structural changes)
+    stylisticRequests.sort((a, b) => a.absoluteIndex - b.absoluteIndex);
+
+    // Combine them: structural requests first, then stylistic requests
+    // This ensures content exists before styles are applied.
+    accumulatedRequests = structuralRequests.map(req => req.request)
+                               .concat(stylisticRequests.map(req => req.request));
+
+    return { requests: accumulatedRequests, endIndex: currentAbsoluteIndex };
 }
 
 module.exports = { htmlToGoogleDocsRequests };

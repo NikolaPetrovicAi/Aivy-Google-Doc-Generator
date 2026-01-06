@@ -11,7 +11,7 @@ const { generatePlan } = require("./aiPlanner"); // ✅ OVO MORA POSTOJATI
 const { generatePage } = require("./aiWriter");  // ✅ OVO TAKOĐE
 const { markdownToGoogleDocsRequests } = require("./markdownTranslator.js");
 const { googleDocsToHtml } = require("./formatConverter.js");
-const { htmlToGoogleDocsRequests } = require("./htmlToGoogleDocsRequests.js"); // NEW
+const { htmlToGoogleDocsRequests } = require("./htmlToGoogleDocsRequests.js");
 const { createSpreadsheet, writeData, getSheetInfo, addChart } = require("./sheets.js");
 
 const openai = new OpenAI({
@@ -182,7 +182,7 @@ Ako dokument zahteva više strana, koristi oznaku
     const userPrompt = `
 Tema: ${topic}
 Tip dokumenta: ${docType}
-Ton pisanja: ${tone}
+Tonisanja: ${tone}
 Nivo detalja: ${details}
 Jezik: ${language}
 Sekcije: ${Array.isArray(sections) ? sections.join(", ") : sections}
@@ -541,68 +541,7 @@ async function createGoogleDocFromPlan(plan, formData) {
   return documentId;
 }
 
-async function updateGoogleDocContent(documentId, htmlContent, title) {
-  const docs = google.docs({ version: "v1", auth: oauth2Client });
-   // === Get all requests from the HTML converter ===
-   const { requests: allRequests } = htmlToGoogleDocsRequests(htmlContent, 1);
-
-     // === Separate requests into text and styling ===
-     const textRequests = allRequests.filter(req => req.insertText);
-     const stylingRequests = allRequests.filter(req => !req.insertText);
-  
-     // === Start with a deletion request ===
-     let initialRequests = [];
-     const currentDoc = await docs.documents.get({ documentId });
-     if (currentDoc.data.body.content && currentDoc.data.body.content.length > 1) {
-       const lastElement = currentDoc.data.body.content[currentDoc.data.body.content.length - 1];
-       if (lastElement.endIndex) {
-         initialRequests.push({
-           deleteContentRange: { range: { startIndex: 1, endIndex: lastElement.endIndex - 1 } },
-         });
-       }
-     }
-  
-     // Add title update if needed
-     if (title && title !== currentDoc.data.title) {
-       initialRequests.push({
-         updateDocumentProperties: { properties: { title }, fields: 'title' },
-       });
-     }
-  
-     // === DIAGNOSTIC LOGGING ===
-     console.log("====== GOOGLE DOCS STYLING PAYLOAD ======");
-     stylingRequests.forEach(req => {
-       if (req.updateTextStyle) {
-         console.log(JSON.stringify(req.updateTextStyle, null, 2));
-       }
-     });
-     console.log("========================================");
-  
-  
-     // === EXECUTE BATCHES IN ORDER ===
-  
-     // 1. First, execute deletion and text insertion
-     const finalInsertRequests = [...initialRequests, ...textRequests];
-     if (finalInsertRequests.length > 0) {
-      console.log("Executing text insertion batch...");
-       await docs.documents.batchUpdate({
-         documentId,
-        requestBody: { requests: finalInsertRequests },
-       });
-     }
-  
-     // 2. Second, execute all styling requests
-     if (stylingRequests.length > 0) {
-       console.log("Executing styling batch...");
-       await docs.documents.batchUpdate({
-         documentId,
-         requestBody: { requests: stylingRequests },
-       });
-     }
-  
-     console.log(`✅ Document ${documentId} updated successfully in two steps.`);
-  
-}
+const { updateGoogleDocContent } = require("./docActions.js");
 
 
 router.post("/save-document/:id", async (req, res) => {
