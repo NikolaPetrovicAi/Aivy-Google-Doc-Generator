@@ -1,8 +1,52 @@
 const { JSDOM } = require('jsdom');
 
+/**
+ * Converts a CSS color string (hex or rgb) to a Google Docs API RGB color object.
+ * @param {string} colorString The CSS color string (e.g., "#FF0000" or "rgb(255, 0, 0)").
+ * @returns {object|null} A Google Docs RGB color object or null if invalid.
+ */
+function parseColor(colorString) {
+    if (!colorString) {
+        return null;
+    }
+
+    // Handle hex format
+    if (colorString.startsWith('#')) {
+        if (!/^#([A-Fa-f0-9]{3}){1,2}$/.test(colorString)) {
+            return null;
+        }
+        let c = colorString.substring(1).split('');
+        if (c.length === 3) {
+            c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+        }
+        c = '0x' + c.join('');
+        return {
+            red: ((c >> 16) & 255) / 255,
+            green: ((c >> 8) & 255) / 255,
+            blue: (c & 255) / 255,
+        };
+    }
+
+    // Handle rgb format
+    if (colorString.startsWith('rgb')) {
+        const rgbValues = colorString.match(/\d+/g);
+        if (rgbValues && rgbValues.length === 3) {
+            return {
+                red: parseInt(rgbValues[0], 10) / 255,
+                green: parseInt(rgbValues[1], 10) / 255,
+                blue: parseInt(rgbValues[2], 10) / 255,
+            };
+        }
+    }
+
+    return null; // Return null for unrecognized formats
+}
+
+
 // Helper to determine the bullet preset based on nesting level
 function getBulletPreset(level) {
-    switch (level % 3) {
+    // The listLevel is 1-based, so we subtract 1 for a 0-based modulo
+    switch ((level - 1) % 3) {
         case 0: return 'BULLET_DISC_CIRCLE_SQUARE'; // Level 1, 4, 7...
         case 1: return 'BULLET_ARROW_DIAMOND_DISC'; // Level 2, 5, 8...
         case 2: return 'BULLET_STAR_ARROW_DIAMOND'; // Level 3, 6, 9...
@@ -57,7 +101,18 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
                 case 'strong': case 'b': newStyles.bold = true; break;
                 case 'em': case 'i': newStyles.italic = true; break;
                 case 's': newStyles.strikethrough = true; break;
-                // Add more inline style processing as needed (e.g., u, s, span with style)
+                case 'span':
+                    if (node.style) {
+                        const foreColor = parseColor(node.style.color);
+                        if (foreColor) {
+                            newStyles.foregroundColor = { color: { rgbColor: foreColor } };
+                        }
+                        const backColor = parseColor(node.style.backgroundColor);
+                        if (backColor) {
+                            newStyles.backgroundColor = { color: { rgbColor: backColor } };
+                        }
+                    }
+                    break;
                 case 'br': // Handle <br> tags as soft newlines with a vertical tab '\v'
                     return [{ type: 'text', content: '\v', styles: { ...currentStyles } }];
             }
@@ -71,7 +126,7 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
         }
         return [];
     }
-
+	
     // Get all block-level nodes in correct document order
     const allBlockNodes = getBlockLevelNodes(body);
 

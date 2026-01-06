@@ -1,3 +1,13 @@
+function componentToHex(c) {
+  const scaled = Math.round(c * 255);
+  const hex = scaled.toString(16);
+  return hex.length == 1 ? "0" + hex : hex;
+}
+
+function rgbToHex(r, g, b) {
+  return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
+}
+
 function processTextRun(element) {
   if (!element.textRun || !element.textRun.content) {
     return '';
@@ -9,11 +19,32 @@ function processTextRun(element) {
   }
 
   const textStyle = element.textRun.textStyle;
-  if (textStyle) {
-    if (textStyle.strikethrough) text = `<s>${text}</s>`;
-    if (textStyle.italic) text = `<em>${text}</em>`;
-    if (textStyle.bold) text = `<strong>${text}</strong>`;
+  
+  // Return plain text if there are no styles at all
+  if (!textStyle) {
+    return text;
   }
+  
+  // Apply simple tags first
+  if (textStyle.italic) text = `<em>${text}</em>`;
+  if (textStyle.bold) text = `<strong>${text}</strong>`;
+  if (textStyle.strikethrough) text = `<s>${text}</s>`;
+  
+  // Handle color styles with a wrapping span
+  const styles = [];
+  if (textStyle.foregroundColor?.color?.rgbColor) {
+    const { red = 0, green = 0, blue = 0 } = textStyle.foregroundColor.color.rgbColor;
+    styles.push(`color: ${rgbToHex(red, green, blue)}`);
+  }
+  if (textStyle.backgroundColor?.color?.rgbColor) {
+    const { red = 0, green = 0, blue = 0 } = textStyle.backgroundColor.color.rgbColor;
+    styles.push(`background-color: ${rgbToHex(red, green, blue)}`);
+  }
+
+  if (styles.length > 0) {
+    return `<span style="${styles.join('; ')}">${text}</span>`;
+  }
+
   return text;
 }
 
@@ -46,7 +77,7 @@ function googleDocsToHtml(content) {
             html += '</ul>';
             inList = false;
         }
-        html += `<p><br></p>`;
+        html += `<p>&nbsp;</p>`;
         continue;
       }
 

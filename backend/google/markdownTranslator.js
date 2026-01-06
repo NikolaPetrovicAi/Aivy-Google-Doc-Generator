@@ -51,38 +51,42 @@ function markdownToGoogleDocsRequests(markdown, initialIndex = 1) {
       currentIndex += textLength;
     } else if (token.type === 'list') {
       for (const item of token.items) {
-        const text = item.text + '\n';
-        const textLength = text.length;
-        
-        // 1. Insert the list item text
-        requests.push({
-          insertText: {
-            location: { index: currentIndex },
-            text: text,
-          },
-        });
-
-        // 2. Apply the bullet point
-        requests.push({
-          createParagraphBullets: {
-            range: {
-              startIndex: currentIndex,
-              endIndex: currentIndex + textLength,
+        // Check if the list item is blank
+        if (item.text.trim() === '') {
+          // If it's blank, just insert a newline character without a bullet
+          requests.push({
+            insertText: {
+              location: { index: currentIndex },
+              text: '\n',
             },
-            bulletPreset: 'BULLET_DISC_CIRCLE_SQUARE',
-          },
-        });
-        currentIndex += textLength;
-      }
-      // Add a final newline to separate the list from the next element
-      requests.push({
-        insertText: {
-          location: { index: currentIndex },
-          text: '\n',
-        },
-      });
-      currentIndex +=1;
+          });
+          currentIndex += 1;
+        } else {
+          // If it has content, process it as a normal list item
+          const text = item.text + '\n';
+          const textLength = text.length;
+          
+          // 1. Insert the list item text
+          requests.push({
+            insertText: {
+              location: { index: currentIndex },
+              text: text,
+            },
+          });
 
+          // 2. Apply the bullet point
+          requests.push({
+            createParagraphBullets: {
+              range: {
+                startIndex: currentIndex,
+                endIndex: currentIndex + textLength,
+              },
+              bulletPreset: 'BULLET_DISC_CIRCLE_SQUARE',
+            },
+          });
+          currentIndex += textLength;
+        }
+      }
     } else {
       // For other token types (like 'space'), just insert the raw text if it exists.
       const text = (token.raw || '') + '\n';
