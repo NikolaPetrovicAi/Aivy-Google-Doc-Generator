@@ -163,7 +163,9 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
                 text: '\n', // Represents an empty paragraph in Google Docs
                 inlineStyles: [],
                 isListItem: false,
-                listLevel: 0
+                listLevel: 0,
+                alignment: null,
+                tagName: 'p',
             });
         } else {
             // Remove the leadingTabs logic, as tabs in text are not the correct way to handle indentation.
@@ -174,6 +176,7 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
                 isListItem: isListItem,
                 listLevel: listLevel,
                 tagName: blockNode.tagName.toLowerCase(), // Store the tag name
+                alignment: blockNode.style.textAlign || null,
             });
         }
     }
@@ -217,27 +220,33 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
             });
         }
 
-        // Add paragraph style request for headings
+        // --- Paragraph Style and Bullet Requests ---
+
+        const paragraphStyle = {};
+        const styleFields = [];
+
+        // Style for headings
         if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(paraInfo.tagName)) {
             const level = paraInfo.tagName.substring(1);
-            requestsToProcess.push({
-                type: 'updateParagraphStyle',
-                request: {
-                    updateParagraphStyle: {
-                        range: {
-                            startIndex: insertionStartIndex,
-                            endIndex: insertionStartIndex + paraInfo.text.length,
-                        },
-                        paragraphStyle: {
-                            namedStyleType: `HEADING_${level}`,
-                        },
-                        fields: 'namedStyleType',
-                    }
-                },
-                absoluteIndex: insertionStartIndex,
-            });
+            paragraphStyle.namedStyleType = `HEADING_${level}`;
+            styleFields.push('namedStyleType');
         }
 
+        // Style for text alignment
+        if (paraInfo.alignment) {
+            const alignmentMap = {
+                left: 'START',
+                center: 'CENTER',
+                right: 'END',
+                justify: 'JUSTIFIED',
+            };
+            const apiAlignment = alignmentMap[paraInfo.alignment.toLowerCase()];
+            if (apiAlignment) {
+                paragraphStyle.alignment = apiAlignment;
+                styleFields.push('alignment');
+            }
+        }
+        
         // Add bullet request for list items
         if (paraInfo.isListItem) {
             requestsToProcess.push({
@@ -254,26 +263,30 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
                 absoluteIndex: insertionStartIndex // Store for sorting
             });
 
-            // Correctly handle nesting by setting indentation on the paragraph
+            // Handle nesting by setting indentation on the paragraph
             if (paraInfo.listLevel > 0) {
-                requestsToProcess.push({
-                    type: 'updateParagraphStyle',
-                    request: {
-                        updateParagraphStyle: {
-                            range: {
-                                startIndex: insertionStartIndex,
-                                endIndex: insertionStartIndex + paraInfo.text.length,
-                            },
-                            paragraphStyle: {
-                                // Indent by 36 points per level. Standard indentation.
-                                indentStart: { magnitude: 36 * paraInfo.listLevel, unit: 'PT' },
-                            },
-                            fields: 'indentStart',
-                        },
-                    },
-                    absoluteIndex: insertionStartIndex,
-                });
+                // Indent by 36 points per level. Standard indentation.
+                paragraphStyle.indentStart = { magnitude: 36 * paraInfo.listLevel, unit: 'PT' };
+                styleFields.push('indentStart');
             }
+        }
+
+        // If any paragraph styles were added, create the request
+        if (styleFields.length > 0) {
+            requestsToProcess.push({
+                type: 'updateParagraphStyle',
+                request: {
+                    updateParagraphStyle: {
+                        range: {
+                            startIndex: insertionStartIndex,
+                            endIndex: insertionStartIndex + paraInfo.text.length,
+                        },
+                        paragraphStyle: paragraphStyle,
+                        fields: styleFields.join(','),
+                    }
+                },
+                absoluteIndex: insertionStartIndex,
+            });
         }
     }
 
