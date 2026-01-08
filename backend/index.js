@@ -7,7 +7,7 @@ const express = require("express");
 const { google } = require("googleapis");
 const axios = require("axios");
 
-const { router: docsRouter, createGoogleDocFromPlan } = require("./google/docs.js");
+const { router: docsRouter, createGoogleDocFromPlan, createGoogleDoc } = require("./google/docs.js");
 const { generatePlan } = require("./google/aiPlanner.js");
 
 
@@ -57,6 +57,17 @@ app.post("/api/create-google-doc", async (req, res) => {
   } catch (error) {
     console.error("Error creating Google Doc:", error);
     res.status(500).json({ error: `Failed to create Google Doc. Reason: ${error.message}` });
+  }
+});
+
+app.post("/api/create-blank-doc", async (req, res) => {
+  try {
+    const newDoc = await createGoogleDoc("New blank document");
+    res.json({ documentId: newDoc.id });
+  } catch (error) {
+    console.error("Error creating blank Google Doc:", error);
+    console.log(error);
+    res.status(500).json({ error: `Failed to create blank Google Doc. Reason: ${error.message}` });
   }
 });
 

@@ -1,6 +1,7 @@
 import { Editor } from '@tiptap/react';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useDebounce } from '../hooks/useDebounce';
+import Link from 'next/link';
 
 interface EditorToolbarProps {
   editor: Editor | null;
@@ -261,13 +262,6 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, onSave, isSaving 
         className={getButtonClass(editor.isActive('bulletList'))}
       >
         Bullet List
-      </button>
-      <button
-        onClick={() => editor.chain().focus().toggleOrderedList().run()}
-        disabled={!editor.can().chain().focus().toggleOrderedList().run()}
-        className={getButtonClass(editor.isActive('orderedList'))}
-      >
-        Ordered List
       </button>
       
       <div className="flex-grow"></div>

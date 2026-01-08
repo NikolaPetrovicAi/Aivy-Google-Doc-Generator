@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import Link from 'next/link'; // Import Link
+import Link from 'next/link';
 import RichTextEditor from '@/app/components/RichTextEditor';
 import EditorToolbar from '@/app/components/EditorToolbar';
 import { Editor } from '@tiptap/react';
@@ -139,17 +139,15 @@ export default function DocEditorPage() {
   };
 
   return (
-    <div className="flex flex-col w-full h-screen bg-gray-50 dark:bg-gray-900">
-      {/* New Document Header */}
-      <header className="flex-shrink-0 bg-white dark:bg-gray-800 border-b dark:border-gray-700 shadow-sm">
-        <div className="flex items-center justify-between p-2 sm:p-3">
-          <div className="flex items-center min-w-0">
-            <Link href="/" className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <div className="flex flex-col w-full h-screen bg-gray-100">
+      <header className="flex-shrink-0 bg-white shadow-sm border-b border-gray-200">
+        <div className="flex items-center p-2 sm:p-3">
+          <Link href="/" className="p-2 rounded-md hover:bg-gray-100 transition-colors flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </Link>
-            <div className="ml-2 min-w-0">
+            <div className="ml-2 min-w-0 flex-grow">
               {isEditingTitle ? (
                 <input
                   ref={titleInputRef}
@@ -158,42 +156,38 @@ export default function DocEditorPage() {
                   onChange={(e) => setTitle(e.target.value)}
                   onBlur={() => setIsEditingTitle(false)}
                   onKeyDown={handleTitleKeyDown}
-                  className="text-lg font-semibold text-gray-800 dark:text-white bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500 rounded-md px-2"
+                  className="text-lg font-semibold text-gray-800 bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500 rounded-md px-2"
                 />
               ) : (
                 <span
                   onClick={() => setIsEditingTitle(true)}
-                  className="text-lg font-semibold text-gray-800 dark:text-white truncate cursor-pointer rounded-md px-2 py-1"
+                  className="text-lg font-semibold text-gray-800 truncate cursor-pointer rounded-md px-2 py-1"
                 >
                   {title}
                 </span>
               )}
             </div>
-          </div>
         </div>
       </header>
+      {/* Sticky Toolbar */}
+      <div className="sticky top-0 z-10 w-full bg-white shadow-md">
+        <div className="flex flex-col items-center gap-2 p-2">
+          <EditorToolbar editor={activeEditor} onSave={handleSaveDocument} isSaving={isSaving} />
+          {saveMessage && (
+            <div
+              className={`w-full max-w-4xl text-center p-2 rounded-md text-sm ${
+                saveMessage.startsWith('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+              }`}
+              role="alert"
+            >
+              {saveMessage}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col items-center w-full p-4 sm:p-8 overflow-y-auto">
-        {/* Header section for Toolbar and Title */}
-        <div className="w-full max-w-4xl mb-4">
-          <div className="flex flex-col items-center gap-4">
-            {/* Centralized toolbar is always visible, centered */}
-            <EditorToolbar editor={activeEditor} onSave={handleSaveDocument} isSaving={isSaving} />
-
-            {saveMessage && (
-              <div
-                className={`w-full text-center p-2 rounded-md text-sm ${
-                  saveMessage.startsWith('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                }`}
-                role="alert"
-              >
-                {saveMessage}
-              </div>
-            )}
-          </div>
-        </div>
-
         {isLoading && <p className="p-4 text-gray-500">Loading document...</p>}
         {error && <p className="p-4 text-red-500">Error: {error}</p>}
 
@@ -202,7 +196,7 @@ export default function DocEditorPage() {
             {editablePages.map((pageContent, index) => (
               <div
                 key={index}
-                className="paginated-editor bg-white shadow-md mx-auto mb-6 p-8 relative dark:bg-gray-800 border dark:border-gray-700"
+                className="paginated-editor bg-white shadow-md mx-auto mb-6 p-8 relative"
                 style={{ minHeight: `${A4_HEIGHT_PX}px`, width: '210mm' }} // A4 width
               >
                 <RichTextEditor

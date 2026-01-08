@@ -18,11 +18,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-
-// 📄 1️⃣ Kreiranje novog Google Docs dokumenta
-router.post("/create", async (req, res) => {
-  const { title } = req.body;
-  try {
+async function createGoogleDoc(title) {
     const drive = google.drive({ version: "v3", auth: oauth2Client });
     const fileMetadata = {
       name: title || "Novi dokument",
@@ -34,10 +30,19 @@ router.post("/create", async (req, res) => {
       fields: "id, name"
     });
 
+    return file.data;
+}
+
+
+// 📄 1️⃣ Kreiranje novog Google Docs dokumenta
+router.post("/create", async (req, res) => {
+  const { title } = req.body;
+  try {
+    const newDoc = await createGoogleDoc(title);
     res.json({
       status: "ok",
-      message: `Novi dokument "${file.data.name}" kreiran.`, 
-      documentId: file.data.id
+      message: `Novi dokument "${newDoc.name}" kreiran.`, 
+      documentId: newDoc.id
     });
   } catch (err) {
     console.error("❌ Greška pri kreiranju dokumenta:", err);
@@ -563,4 +568,4 @@ router.post("/save-document/:id", async (req, res) => {
   }
 });
 
-module.exports = { router, createGoogleDocFromPlan, updateGoogleDocContent };
+module.exports = { router, createGoogleDocFromPlan, updateGoogleDocContent, createGoogleDoc };
