@@ -113,13 +113,9 @@ app.get("/auth/google", (req, res) => {
     prompt: "consent",
     include_granted_scopes: true,
     scope: [
-      "https://www.googleapis.com/auth/spreadsheets",
-      "https://www.googleapis.com/auth/documents",
-      "https://www.googleapis.com/auth/gmail.readonly",
-      "https://www.googleapis.com/auth/gmail.send",
-      "https://www.googleapis.com/auth/drive.metadata.readonly",
-      'https://www.googleapis.com/auth/drive.file',
-      "https://www.googleapis.com/auth/drive",
+      'https://www.googleapis.com/auth/documents',              // Read, write, and create Google Docs
+      'https://www.googleapis.com/auth/drive.file',             // Access to files created or opened by the app
+      'https://www.googleapis.com/auth/drive.metadata.readonly' // List all documents
     ],
   });
   res.redirect(url);
