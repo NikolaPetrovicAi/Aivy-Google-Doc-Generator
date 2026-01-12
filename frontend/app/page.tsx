@@ -5,6 +5,7 @@ import ActionToolbar from "./components/ActionToolbar";
 import DocumentGrid from "./components/DocumentGrid";
 import { useRouter } from "next/navigation";
 import { Plus, FilePlus } from "lucide-react";
+import { useAuthCheck } from "./hooks/useAuthCheck";
 
 
 interface Document {
@@ -16,6 +17,8 @@ interface Document {
 }
 
 export default function Home() {
+  useAuthCheck();
+  
   const [documents, setDocuments] = useState<Document[]>([]);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -28,6 +31,7 @@ export default function Home() {
     try {
       const response = await fetch('http://localhost:8080/api/create-blank-doc', {
         method: 'POST',
+        credentials: 'include'
       });
       if (!response.ok) {
         throw new Error('Failed to create new document');
@@ -46,7 +50,7 @@ export default function Home() {
     setLoading(true);
     try {
       const url = `http://localhost:8080/api/google-docs?${token ? `nextPageToken=${token}` : ''}`;
-      const response = await fetch(url);
+      const response = await fetch(url, { credentials: 'include' });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }

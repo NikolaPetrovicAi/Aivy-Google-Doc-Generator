@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useDebounce } from '../hooks/useDebounce';
 import PlanPreview from '../components/PlanPreview';
 import { fonts } from '../lib/fonts';
+import { useAuthCheck } from '../hooks/useAuthCheck';
 
 // Define the types for the form state and the plan
 interface FormState {
@@ -26,6 +27,8 @@ interface Plan {
 }
 
 export default function GenerateDocumentPage() {
+  useAuthCheck();
+  
   const router = useRouter(); // Instantiate the router
   const [formState, setFormState] = useState<FormState>({
     docType: '',
@@ -93,6 +96,7 @@ export default function GenerateDocumentPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ plan: plan.pages, formData: formState }),
+        credentials: 'include'
       });
 
       if (!response.ok) {

@@ -1,11 +1,10 @@
 // backend/google/docActions.js
 const { google } = require("googleapis");
-const { oauth2Client } = require("./auth");
 const { htmlToGoogleDocsRequests } = require("./htmlToGoogleDocsRequests.js");
 
-async function updateGoogleDocContent(documentId, htmlContent, title) {
-    const docs = google.docs({ version: "v1", auth: oauth2Client });
-    const drive = google.drive({ version: "v3", auth: oauth2Client });
+async function updateGoogleDocContent(authClient, documentId, htmlContent, title) {
+    const docs = google.docs({ version: "v1", auth: authClient });
+    const drive = google.drive({ version: "v3", auth: authClient });
   
     // First, fetch the current document to get its title
     const currentDoc = await docs.documents.get({ documentId });

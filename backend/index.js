@@ -4,6 +4,7 @@ const cors = require("cors");
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const express = require("express");
+const session = require("express-session");
 const { google } = require("googleapis");
 const axios = require("axios");
 
@@ -12,22 +13,48 @@ const { generatePlan } = require("./google/aiPlanner.js");
 
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3000', // Allow requests from the frontend
+  credentials: true // Allow cookies to be sent and received
+}));
 app.use(express.json());
+
+// Session Middleware Configuration
+app.use(session({
+  // IMPORTANT: This secret should be moved to an environment variable in a real application.
+  secret: 'temporary-secret-key-for-development',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { 
+    secure: false, // Set to true if you are using HTTPS in production
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
 app.use("/thumbnail_cache", express.static("thumbnail_cache"));
 app.use("/docs", docsRouter);
 // Google Alati
 const { sheetsRouter } = require("./google/sheets");
 app.use("/sheets", sheetsRouter);
 const { router: driveRoutes, getGoogleDocs } = require("./google/drive");
-app.use("/drive", driveRoutes);
+const { requireAuth } = require("./middleware/auth");
 const gmailRoutes = require("./google/gmail");
+app.use("/drive", driveRoutes);
 app.use("/gmail", gmailRoutes);
 
-app.get("/api/google-docs", async (req, res) => {
+app.get('/api/auth/status', (req, res) => {
+  if (req.session.tokens) {
+    res.json({ isAuthenticated: true });
+  } else {
+    res.json({ isAuthenticated: false });
+  }
+});
+
+app.get("/api/google-docs", requireAuth, async (req, res) => {
   try {
     const { nextPageToken } = req.query;
-    const { files, nextPageToken: newNextPageToken } = await getGoogleDocs(nextPageToken);
+    // Pass the user-specific client to the function
+    const { files, nextPageToken: newNextPageToken } = await getGoogleDocs(req.oauth2Client, nextPageToken);
     
     // Rename 'files' to 'documents' to match frontend expectation
     res.json({ documents: files, nextPageToken: newNextPageToken });
@@ -49,10 +76,10 @@ app.post("/api/generate-plan", async (req, res) => {
   }
 });
 
-app.post("/api/create-google-doc", async (req, res) => {
+app.post("/api/create-google-doc", requireAuth, async (req, res) => {
   try {
     const { plan, formData } = req.body;
-    const documentId = await createGoogleDocFromPlan(plan, formData);
+    const documentId = await createGoogleDocFromPlan(req.oauth2Client, plan, formData);
     res.json({ documentId });
   } catch (error) {
     console.error("Error creating Google Doc:", error);
@@ -60,9 +87,9 @@ app.post("/api/create-google-doc", async (req, res) => {
   }
 });
 
-app.post("/api/create-blank-doc", async (req, res) => {
+app.post("/api/create-blank-doc", requireAuth, async (req, res) => {
   try {
-    const newDoc = await createGoogleDoc("New blank document");
+    const newDoc = await createGoogleDoc(req.oauth2Client, "New blank document");
     res.json({ documentId: newDoc.id });
   } catch (error) {
     console.error("Error creating blank Google Doc:", error);
@@ -75,8 +102,8 @@ app.post("/api/create-blank-doc", async (req, res) => {
 
 
 
-// 1. Konfiguriši OAuth2 klijent
-const { oauth2Client, setTokens } = require("./google/auth");
+// 1. Get the base OAuth2 client (used for generating auth URL)
+const { oauth2Client } = require("./google/auth");
 
 
 // 2. Endpoint za pokretanje login-a
@@ -98,16 +125,19 @@ app.get("/auth/google", (req, res) => {
   res.redirect(url);
 });
 
-// 3. Callback endpoint (ovde Google šalje code)
+// 3. Callback endpoint (Handles the redirect from Google)
 app.get("/auth/google/callback", async (req, res) => {
   const code = req.query.code;
   try {
     const { tokens } = await oauth2Client.getToken(code);
-    setTokens(tokens); // ✅ koristimo helper iz google/auth.js
-    res.send("Login uspešan! Pogledaj terminal za tokens ✅");
+    // Store tokens in the user's session
+    req.session.tokens = tokens;
+    
+    // On successful login, redirect back to the frontend application
+    res.redirect("http://localhost:3000");
   } catch (err) {
-    console.error("Greška:", err);
-    res.send("Došlo je do greške.");
+    console.error("Error retrieving access token:", err);
+    res.status(500).send("Error during authentication.");
   }
 });
 

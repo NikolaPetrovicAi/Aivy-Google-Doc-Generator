@@ -2,13 +2,13 @@
 const express = require("express");
 const router = express.Router();
 const { google } = require("googleapis");
-const { oauth2Client } = require("./auth");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
+const { requireAuth } = require("../middleware/auth");
 
-async function getGoogleDocs(pageToken) {
-  const drive = google.drive({ version: "v3", auth: oauth2Client });
+async function getGoogleDocs(authClient, pageToken) {
+  const drive = google.drive({ version: "v3", auth: authClient });
   const result = await drive.files.list({
     q: "mimeType='application/vnd.google-apps.document'",
     pageSize: 20,
@@ -35,7 +35,8 @@ async function getGoogleDocs(pageToken) {
       if (fs.existsSync(cachedFilePath)) {
         return { ...file, preview: localPreviewPath };
       } else {
-        const response = await axios.get(file.thumbnailLink, { responseType: "stream" });
+        // Important: Use the authenticated client to fetch thumbnails
+        const response = await authClient.request({ url: file.thumbnailLink, responseType: 'stream' });
         const writer = fs.createWriteStream(cachedFilePath);
         response.data.pipe(writer);
 
@@ -52,11 +53,14 @@ async function getGoogleDocs(pageToken) {
   return { files: filesWithPreviews, nextPageToken: result.data.nextPageToken };
 }
 
+// All routes in this file now require authentication.
+router.use(requireAuth);
+
 // 🔍 1. Lista fajlova
 router.get("/list", async (req, res) => {
   try {
     const { pageToken } = req.query;
-    const data = await getGoogleDocs(pageToken);
+    const data = await getGoogleDocs(req.oauth2Client, pageToken);
     res.json({ status: "ok", ...data });
   } catch (err) {
     console.error("❌ Greška pri listanju fajlova:", err);
@@ -68,7 +72,7 @@ router.get("/list", async (req, res) => {
 router.get("/find", async (req, res) => {
   const query = req.query.q || "";
   try {
-    const drive = google.drive({ version: "v3", auth: oauth2Client });
+    const drive = google.drive({ version: "v3", auth: req.oauth2Client });
     const response = await drive.files.list({
       q: `name contains '${query}'`,
       fields: "files(id, name, mimeType)"
@@ -86,7 +90,7 @@ router.delete("/delete", async (req, res) => {
   if (!id) return res.status(400).json({ error: "Nedostaje ID fajla." });
 
   try {
-    const drive = google.drive({ version: "v3", auth: oauth2Client });
+    const drive = google.drive({ version: "v3", auth: req.oauth2Client });
     await drive.files.delete({ fileId: id });
     res.json({ status: "ok", message: "Fajl uspešno obrisan." });
   } catch (err) {
@@ -102,7 +106,7 @@ router.patch("/rename", async (req, res) => {
     return res.status(400).json({ error: "Nedostaje 'id' ili 'newName'." });
 
   try {
-    const drive = google.drive({ version: "v3", auth: oauth2Client });
+    const drive = google.drive({ version: "v3", auth: req.oauth2Client });
     const result = await drive.files.update({
       fileId: id,
       requestBody: { name: newName },
@@ -119,3 +123,4 @@ router.patch("/rename", async (req, res) => {
 });
 
 module.exports = { router, getGoogleDocs };
+

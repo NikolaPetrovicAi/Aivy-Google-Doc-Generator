@@ -6,11 +6,14 @@ import Link from 'next/link';
 import RichTextEditor from '@/app/components/RichTextEditor';
 import EditorToolbar from '@/app/components/EditorToolbar';
 import { Editor } from '@tiptap/react';
+import { useAuthCheck } from '@/app/hooks/useAuthCheck';
 
 // Define A4 dimensions for visual pagination (in pixels, assuming 96 DPI)
 const A4_HEIGHT_PX = 1123; // A4 height is 297mm, approx 11.7 inches * 96 dpi
 
 export default function DocEditorPage() {
+  useAuthCheck();
+  
   const params = useParams();
   const { id } = params;
 
@@ -45,7 +48,7 @@ export default function DocEditorPage() {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch(`http://localhost:8080/docs/doc/${id}`);
+        const response = await fetch(`http://localhost:8080/docs/doc/${id}`, { credentials: 'include' });
         if (!response.ok) {
           throw new Error(`Failed to fetch document. Status: ${response.status}`);
         }
@@ -115,6 +118,7 @@ export default function DocEditorPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ htmlContent: fullHtmlToSave, title }),
+        credentials: 'include',
       });
 
       if (!response.ok) {
