@@ -3,8 +3,11 @@ const express = require("express");
 const router = express.Router();
 const { google } = require("googleapis");
 const { requireAuth } = require("../middleware/auth");
+const fs = require('fs/promises'); // For debugging
+const path = require('path'); // For debugging
 
-// ========== AI INTEGRATION ==========
+
+// ========== AI INTEGRATION ========== 
 const OpenAI = require("openai");
 
 const { generatePlan } = require("./aiPlanner");

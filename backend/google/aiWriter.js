@@ -14,7 +14,27 @@ Jezik: ${language}
 Zahtevi:
 - Piši smislen, jasan i profesionalan tekst.
 - Koristi Markdown (#, ##, -, |, >, itd.).
-- Ako imaš tabele ili liste, formatiraj ih ispravno.
+
+- **PRAVILA ZA LISTE (OBAVEZNO PRATITI):**
+  - Kada pišeš stavke unutar ISTE liste, NIKADA ne ostavljaj prazan red između njih.
+    - **ISPRAVNO:**
+      - Prva stavka
+      - Druga stavka
+    - **NEISPRAVNO:**
+      - Prva stavka
+      
+      - Druga stavka
+
+  - Kada želiš da napraviš vizuelni razmak (prazan red) između DVE ODVOJENE LISTE ili između liste i drugog teksta, KORISTI specijalni marker.
+    - **ISPRAVNO:**
+      - Prva lista, stavka 1
+      <!-- SPACER -->
+      - Druga lista, stavka 1
+    - **NEISPRAVNO:**
+      - Prva lista, stavka 1
+      
+      - Druga lista, stavka 1
+
 - Nemoj generisati sadržaj drugih strana.
 `;
 

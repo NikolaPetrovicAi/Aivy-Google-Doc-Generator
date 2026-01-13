@@ -3,107 +3,172 @@ const { marked } = require('marked');
 
 /**
  * Converts a Markdown string into an array of Google Docs API requests.
+ * This new version handles nested styles (bold, italic) within paragraphs and lists,
+ * and correctly processes empty lines between blocks to avoid creating empty list items.
+ * It also includes special logic to handle AI-generated patterns where a bolded list item
+ * serves as a title for a subsequent list item that should be a paragraph.
+ *
  * @param {string} markdown - The Markdown string to convert.
- * @returns {Array<Object>} An array of Google Docs API request objects.
+ * @param {number} initialIndex - The starting index in the Google Doc.
+ * @returns {{requests: Array<Object>, endIndex: number}} An object containing the array of requests and the final index.
  */
 function markdownToGoogleDocsRequests(markdown, initialIndex = 1) {
-  const tokens = marked.lexer(markdown);
-  const requests = [];
-  let currentIndex = initialIndex;
+    const tokens = marked.lexer(markdown);
+    const requests = [];
+    let currentIndex = initialIndex;
 
-  for (const token of tokens) {
-    if (token.type === 'heading') {
-      const text = token.text + '\n';
-      const textLength = text.length;
-      const headingLevel = `HEADING_${token.depth}`;
+    const processInline = (inlineTokens, startIndex) => {
+        let text = '';
+        const styles = [];
 
-      // 1. Insert the heading text
-      requests.push({
-        insertText: {
-          location: { index: currentIndex },
-          text: text,
-        },
-      });
-
-      // 2. Style the paragraph as a heading
-      requests.push({
-        updateParagraphStyle: {
-          range: {
-            startIndex: currentIndex,
-            endIndex: currentIndex + textLength,
-          },
-          paragraphStyle: {
-            namedStyleType: headingLevel,
-          },
-          fields: 'namedStyleType',
-        },
-      });
-      currentIndex += textLength;
-    } else if (token.type === 'paragraph') {
-      const text = token.text + '\n';
-      const textLength = text.length;
-      requests.push({
-        insertText: {
-          location: { index: currentIndex },
-          text: text,
-        },
-      });
-      currentIndex += textLength;
-    } else if (token.type === 'list') {
-      for (const item of token.items) {
-        // Check if the list item is blank
-        if (item.text.trim() === '') {
-          // If it's blank, just insert a newline character without a bullet
-          requests.push({
-            insertText: {
-              location: { index: currentIndex },
-              text: '\n',
-            },
-          });
-          currentIndex += 1;
-        } else {
-          // If it has content, process it as a normal list item
-          const text = item.text + '\n';
-          const textLength = text.length;
-          
-          // 1. Insert the list item text
-          requests.push({
-            insertText: {
-              location: { index: currentIndex },
-              text: text,
-            },
-          });
-
-          // 2. Apply the bullet point
-          requests.push({
-            createParagraphBullets: {
-              range: {
-                startIndex: currentIndex,
-                endIndex: currentIndex + textLength,
-              },
-              bulletPreset: 'BULLET_DISC_CIRCLE_SQUARE',
-            },
-          });
-          currentIndex += textLength;
+        function recurse(tokens) {
+            for (const token of tokens) {
+                const start = text.length;
+                switch (token.type) {
+                    case 'strong':
+                        recurse(token.tokens);
+                        styles.push({ type: 'bold', range: { start, end: text.length } });
+                        break;
+                    case 'em':
+                        recurse(token.tokens);
+                        styles.push({ type: 'italic', range: { start, end: text.length } });
+                        break;
+                    case 'text':
+                        text += token.text;
+                        break;
+                    case 'br':
+                        text += '\n';
+                        break;
+                    case 'list':
+                        text += token.raw;
+                        break;
+                }
+            }
         }
-      }
-    } else {
-      // For other token types (like 'space'), just insert the raw text if it exists.
-      const text = (token.raw || '') + '\n';
-       if (text.trim()) {
-         const textLength = text.length;
-         requests.push({
-           insertText: {
-             location: { index: currentIndex },
-             text: text,
-           },
-         });
-         currentIndex += textLength;
-       }
-    }
-  }
 
-  return { requests, endIndex: currentIndex };
+        recurse(inlineTokens);
+
+        const googleDocsStyles = styles.map(style => {
+            const styleRequest = {
+                updateTextStyle: {
+                    range: { startIndex: startIndex + style.range.start, endIndex: startIndex + style.range.end },
+                    textStyle: {},
+                    fields: '',
+                },
+            };
+            if (style.type === 'bold') {
+                styleRequest.updateTextStyle.textStyle.bold = true;
+                styleRequest.updateTextStyle.fields = 'bold';
+            } else if (style.type === 'italic') {
+                styleRequest.updateTextStyle.textStyle.italic = true;
+                styleRequest.updateTextStyle.fields = 'italic';
+            }
+            return styleRequest;
+        });
+
+        return { text, styles: googleDocsStyles };
+    };
+
+    for (const token of tokens) {
+        if (token.type === 'space') {
+            requests.push({ insertText: { location: { index: currentIndex }, text: '\n' } });
+            currentIndex += 1;
+            continue;
+        }
+
+        if (token.type === 'heading') {
+            const text = token.text + '\n';
+            const textLength = text.length;
+            requests.push({ insertText: { location: { index: currentIndex }, text } });
+            requests.push({
+                updateParagraphStyle: {
+                    range: { startIndex: currentIndex, endIndex: currentIndex + textLength },
+                    paragraphStyle: { namedStyleType: `HEADING_${token.depth}` },
+                    fields: 'namedStyleType',
+                },
+            });
+            currentIndex += textLength;
+        } else if (token.type === 'paragraph') {
+            const { text: rawText, styles } = processInline(token.tokens, currentIndex);
+            const text = rawText + '\n';
+            const textLength = text.length;
+
+            if (textLength > 1 || (textLength === 1 && text !== '\n')) {
+                requests.push({ insertText: { location: { index: currentIndex }, text } });
+                requests.push(...styles);
+                currentIndex += textLength;
+            }
+        } else if (token.type === 'list') {
+            for (let i = 0; i < token.items.length; i++) {
+                const item = token.items[i];
+                const isTitleItem = item.tokens.length === 1 && item.tokens[0].type === 'strong';
+                const nextItem = token.items[i + 1];
+                const nextItemIsParagraph = nextItem && (nextItem.tokens.length !== 1 || nextItem.tokens[0].type !== 'strong');
+
+                if (isTitleItem && nextItemIsParagraph) {
+                    // This block handles the "bolded title list item" + "paragraph list item" pattern.
+                    
+                    // 1. Process the title item with a bullet point.
+                    const { text: titleText, styles: titleStyles } = processInline(item.tokens, currentIndex);
+                    const titleWithNewline = titleText.trimEnd() + '\n';
+                    const titleLength = titleWithNewline.length;
+
+                    if (titleLength > 1) {
+                        requests.push({ insertText: { location: { index: currentIndex }, text: titleWithNewline } });
+                        requests.push(...titleStyles);
+                        requests.push({
+                            createParagraphBullets: {
+                                range: { startIndex: currentIndex, endIndex: currentIndex + titleLength },
+                                bulletPreset: 'BULLET_DISC_CIRCLE_SQUARE',
+                            },
+                        });
+                        currentIndex += titleLength;
+                    }
+
+                    // 2. Process subsequent items as paragraphs (without bullets).
+                    while (i + 1 < token.items.length && (token.items[i + 1].tokens.length !== 1 || token.items[i + 1].tokens[0].type !== 'strong')) {
+                        i++; // Consume the paragraph item.
+                        const paragraphItem = token.items[i];
+                        const { text: paraText, styles: paraStyles } = processInline(paragraphItem.tokens, currentIndex);
+                        const paraWithNewline = paraText.trimEnd() + '\n';
+                        const paraLength = paraWithNewline.length;
+
+                        if (paraLength > 1) {
+                            requests.push({ insertText: { location: { index: currentIndex }, text: paraWithNewline } });
+                            requests.push(...paraStyles); // Apply styles if any
+                            currentIndex += paraLength;
+                        }
+                    }
+
+                    // 3. Add a blank line between blocks.
+                    if (i < token.items.length -1) { // Avoid adding a blank line at the very end
+                        requests.push({ insertText: { location: { index: currentIndex }, text: '\n' } });
+                        currentIndex += 1;
+                    }
+
+                } else {
+                    // This is a regular list item.
+                    const { text: rawText, styles } = processInline(item.tokens, currentIndex);
+                    const text = rawText + '\n';
+                    const textLength = text.length;
+
+                    if (textLength > 1 || (textLength === 1 && text !== '\n')) {
+                        requests.push({ insertText: { location: { index: currentIndex }, text } });
+                        requests.push(...styles);
+                        requests.push({
+                            createParagraphBullets: {
+                                range: { startIndex: currentIndex, endIndex: currentIndex + textLength },
+                                bulletPreset: 'BULLET_DISC_CIRCLE_SQUARE',
+                            },
+                        });
+                        currentIndex += textLength;
+                    }
+                }
+            }
+        }
+    }
+
+    return { requests, endIndex: currentIndex };
 }
 
 module.exports = { markdownToGoogleDocsRequests };
