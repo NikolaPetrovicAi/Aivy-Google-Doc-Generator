@@ -34,13 +34,9 @@ app.use(session({
 app.use("/thumbnail_cache", express.static("thumbnail_cache"));
 app.use("/docs", docsRouter);
 // Google Alati
-const { sheetsRouter } = require("./google/sheets");
-app.use("/sheets", sheetsRouter);
 const { router: driveRoutes, getGoogleDocs } = require("./google/drive");
 const { requireAuth } = require("./middleware/auth");
-const gmailRoutes = require("./google/gmail");
 app.use("/drive", driveRoutes);
-app.use("/gmail", gmailRoutes);
 
 app.get('/api/auth/status', (req, res) => {
   if (req.session.tokens) {
@@ -189,93 +185,6 @@ let ASSISTANT_ID = process.env.OPENAI_ASSISTANT_ID || null;
 
 // 🧰 Definišemo koje "function tools" asistent zna da pozove
 const ASSISTANT_TOOLS = [
-  {
-    type: "function",
-    function: {
-      name: "write_sheet",
-      description: "Upiši 2D niz vrednosti u dati Google Sheet opseg.",
-      parameters: {
-        type: "object",
-        properties: {
-          spreadsheetId: { type: "string" },
-          range: { type: "string" },
-          values: {
-            type: "array",
-            items: {
-              type: "array",
-              items: { type: "string" }
-            }
-          },
-          valueInputOption: {
-            type: "string",
-            enum: ["RAW", "USER_ENTERED"],
-            default: "RAW"
-          }
-        },
-        required: ["spreadsheetId", "range", "values"]
-      }
-    }
-  },
-  {
-    type: "function",
-    function: {
-      name: "update_sheet",
-      description: "batchUpdate zahtevi (formatiranje, merge, dodavanje listova...).",
-      parameters: {
-        type: "object",
-        properties: {
-          spreadsheetId: { type: "string" },
-          requests: {
-            type: "array",
-            items: { type: "object" }
-          }
-        },
-        required: ["spreadsheetId", "requests"]
-      }
-    }
-  },
-  {type: "function",
-  function: {
-    name: "create_sheet",
-    description: "Kreira novi Google Sheets dokument i vraća njegov spreadsheetId.",
-    parameters: {
-      type: "object",
-      properties: {
-        title: { type: "string", description: "Naziv novog dokumenta" }
-      },
-      required: ["title"]
-    }
-  }
-},
-  {
-    type: "function",
-    function: {
-      name: "read_sheet",
-      description: "Čitaj vrednosti iz zadatog opsega.",
-      parameters: {
-        type: "object",
-        properties: {
-          spreadsheetId: { type: "string" },
-          range: { type: "string" }
-        },
-        required: ["spreadsheetId", "range"]
-      }
-    }
-  },
-  {
-    type: "function",
-    function: {
-      name: "find_sheet",
-      description: "Nađi Google Sheets fajl po delu naziva.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string" }
-        },
-        required: ["query"]
-      }
-    }
-  },
   // --- NOVO: Google Docs Tools ---
   {
     type: "function",
@@ -376,52 +285,6 @@ const ASSISTANT_TOOLS = [
     }
   }
 },
-// --- Gmail Tools ---
-{
-  type: "function",
-  function: {
-    name: "list_gmail",
-    description: "Vraća listu poslednjih 10 mejlova (naslov, pošiljalac, datum).",
-    parameters: {
-      type: "object",
-      properties: {},
-      required: []
-    }
-  }
-},
-{
-  type: "function",
-  function: {
-    name: "find_gmail",
-    description: "Pretražuje Gmail sanduče po nazivu, pošiljaocu ili reči u naslovu.",
-    parameters: {
-      type: "object",
-      properties: {
-        query: { type: "string", description: "Tekst za pretragu (npr. 'from:google' ili 'subject:plan')" }
-      },
-      required: ["query"]
-    }
-  }
-},
-{
-  type: "function",
-  function: {
-    name: "send_gmail",
-    description: "Šalje mejl na zadatu adresu.",
-    parameters: {
-      type: "object",
-      properties: {
-        to: { type: "string", description: "Adresa primaoca" },
-        subject: { type: "string", description: "Naslov mejla" },
-        text: { type: "string", description: "Tekst poruke" }
-      },
-      required: ["to", "subject", "text"]
-    }
-  }
-}
-
-
-
 ];
 
 // 🧠 Kreiraj assistant ako ne postoji (radi jednom na startu)

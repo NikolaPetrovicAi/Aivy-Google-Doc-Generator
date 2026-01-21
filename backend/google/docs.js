@@ -124,7 +124,7 @@ router.get("/doc/:id", requireAuth, async (req, res) => {
       return res.status(404).json({ error: "Document content not found." });
     }
 
-    const htmlContent = googleDocsToHtml(response.data.body.content);
+    const htmlContent = googleDocsToHtml(response.data);
 
     res.json({
       title: response.data.title,

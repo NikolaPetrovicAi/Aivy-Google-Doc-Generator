@@ -3,34 +3,8 @@ import StarterKit from '@tiptap/starter-kit';
 import TextAlign from '@tiptap/extension-text-align';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
-import { Extension } from '@tiptap/core';
+import Highlight from '@tiptap/extension-highlight';
 import React, { useEffect } from 'react';
-
-// Custom extension to add background-color support to TextStyle
-const BackgroundColorExtension = Extension.create({
-  name: 'backgroundColor',
-  addGlobalAttributes() {
-    return [
-      {
-        types: ['textStyle'],
-        attributes: {
-          backgroundColor: {
-            default: null,
-            parseHTML: element => element.style.backgroundColor,
-            renderHTML: attributes => {
-              if (!attributes.backgroundColor) {
-                return {};
-              }
-              return {
-                style: `background-color: ${attributes.backgroundColor}`,
-              };
-            },
-          },
-        },
-      },
-    ];
-  },
-});
 
 interface RichTextEditorProps {
   content: string;
@@ -50,18 +24,21 @@ const RichTextEditor = ({
   editable = true,
 }: RichTextEditorProps) => {
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         history: {
           depth: 100,
         },
+        // Enable trailing node to fix list editing UX
+        trailingNode: true,
       }),
       TextAlign.configure({
         types: ['heading', 'paragraph'],
       }),
       TextStyle,
       Color,
-      BackgroundColorExtension, // Add our custom extension
+      Highlight.configure({ multicolor: true }),
     ],
     content: content,
     editable,
@@ -74,6 +51,12 @@ const RichTextEditor = ({
   });
 
   useEffect(() => {
+    if (editor && content !== editor.getHTML()) {
+      editor.commands.setContent(content, false); // false prevents triggering an update loop
+    }
+  }, [content, editor]);
+
+  useEffect(() => {
     if (editor) {
       onEditorReady(editor);
     }
@@ -83,11 +66,10 @@ const RichTextEditor = ({
   }, [editor, onEditorReady]);
 
   return (
-    <div className="prose dark:prose-invert max-w-none flex-grow overflow-y-auto p-4">
+    <div className="max-w-none flex-grow overflow-y-auto p-4">
       <EditorContent editor={editor} />
     </div>
   );
 };
 
 export default RichTextEditor;
-

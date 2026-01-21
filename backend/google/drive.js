@@ -23,7 +23,7 @@ async function getGoogleDocs(authClient, pageToken) {
 
   const filesWithPreviews = await Promise.all(
     result.data.files.map(async (file) => {
-      if (!file.hasThumbnail) {
+      if (!file.hasThumbnail || !file.thumbnailLink) {
         return { ...file, preview: "No preview available" };
       }
 

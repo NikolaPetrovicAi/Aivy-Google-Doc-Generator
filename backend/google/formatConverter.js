@@ -20,17 +20,14 @@ function processTextRun(element) {
 
   const textStyle = element.textRun.textStyle;
   
-  // Return plain text if there are no styles at all
   if (!textStyle) {
     return text;
   }
   
-  // Apply simple tags first
   if (textStyle.italic) text = `<em>${text}</em>`;
   if (textStyle.bold) text = `<strong>${text}</strong>`;
   if (textStyle.strikethrough) text = `<s>${text}</s>`;
   
-  // Handle color styles with a wrapping span
   const styles = [];
   if (textStyle.foregroundColor?.color?.rgbColor) {
     const { red = 0, green = 0, blue = 0 } = textStyle.foregroundColor.color.rgbColor;
@@ -49,74 +46,98 @@ function processTextRun(element) {
 }
 
 
-function googleDocsToHtml(content) {
-  if (!content) return '';
+/**
+ * Converts a full Google Docs document object to an HTML string.
+ * This version correctly differentiates between ordered (numbered) and unordered (bullet) lists.
+ * @param {object} doc - The full Google Docs document object.
+ */
+function googleDocsToHtml(doc) {
+  if (!doc || !doc.body || !doc.body.content) return '';
 
+  const content = doc.body.content;
+  const lists = doc.lists;
   let html = '';
-  let inList = false;
+  let currentList = null; // Tracks the current list state { id: string, tag: 'ul' | 'ol' }
 
   for (let i = 0; i < content.length; i++) {
     const item = content[i];
 
     if (item.paragraph) {
       const paragraph = item.paragraph;
-      const elements = paragraph.elements || [];
-
-      // Check if the paragraph is effectively empty (contains only whitespace or newline characters)
-      const fullText = elements.map(el => el.textRun?.content || '').join('');
-      const isBlankLine = fullText.trim() === '';
-
-      // **THE FIX**: If this is the last element in the document, and it's a blank line, skip it.
-      // Google Docs often adds a final empty paragraph that we don't want to convert.
-      if (i === content.length - 1 && isBlankLine) {
-        continue;
-      }
-
-      if (isBlankLine) {
-        if(inList) {
-            html += '</ul>';
-            inList = false;
-        }
-        html += `<p>&nbsp;</p>`;
-        continue;
-      }
-
-      let innerHtml = (paragraph.elements || []).map(processTextRun).join('');
+      const bullet = paragraph.bullet;
       
-      // Remove trailing newline if it's from paragraph termination in Google Docs.
-      // HTML <p> tags implicitly handle line breaks, so explicit \n is redundant.
-      if (innerHtml.endsWith('\n')) {
-        innerHtml = innerHtml.slice(0, -1);
-      }
-      // Replace any remaining internal vertical tabs (soft breaks) with <br> tags for HTML
+      let innerHtml = (paragraph.elements || []).map(processTextRun).join('');
       innerHtml = innerHtml.replace(/\v/g, '<br>');
 
-      const styleType = paragraph.paragraphStyle?.namedStyleType || 'NORMAL_TEXT';
-      const isListItem = !!paragraph.bullet;
-      
-      if (!inList && isListItem) {
-          html += `<ul>`;
-          inList = true;
-      }
-      if (inList && !isListItem) {
-          html += `</ul>`;
-          inList = false;
-      }
-      
-      if (isListItem) {
-        html += `<li><p>${innerHtml}</p></li>`;
-      }
-      else if (styleType.startsWith('HEADING_')) {
-        const level = styleType.split('_')[1];
-        html += `<h${level}>${innerHtml}</h${level}>`;
-      } else {
-        html += `<p>${innerHtml}</p>`;
+      // Logic to close a list if the current paragraph is not a list item
+      if (!bullet) {
+        if (currentList) {
+          html += `</${currentList.tag}>`;
+          currentList = null;
+        }
+
+        // Handle headings and normal paragraphs
+        const styleType = paragraph.paragraphStyle?.namedStyleType || 'NORMAL_TEXT';
+        if (styleType.startsWith('HEADING_')) {
+          const level = styleType.split('_')[1];
+          html += `<h${level}>${innerHtml}</h${level}>`;
+        } else {
+            const isBlankLine = innerHtml.trim() === '';
+            if (i === content.length - 1 && isBlankLine) continue; // Skip final blank line
+            html += `<p>${isBlankLine ? '&nbsp;' : innerHtml}</p>`;
+        }
+      } else { // This paragraph is a list item
+        const listId = bullet.listId;
+        if (!lists[listId]) continue; // Skip if list definition is missing
+
+        // --- LIST START/CONTINUATION LOGIC ---
+        if (!currentList || currentList.id !== listId) {
+          if (currentList) {
+            html += `</${currentList.tag}>`;
+          }
+          const listProperties = lists[listId].listProperties;
+          const nestingLevel = listProperties.nestingLevels[bullet.nestingLevel || 0];
+          const glyphType = nestingLevel.glyphType || '';
+          const listTag = ['DECIMAL', 'ALPHA', 'ROMAN'].includes(glyphType) ? 'ol' : 'ul';
+          
+          html += `<${listTag}>`;
+          currentList = { id: listId, tag: listTag };
+        }
+
+        // --- LOOKAHEAD LOGIC TO BUILD FULL LIST ITEM CONTENT ---
+        let fullListItemContent = `<p>${innerHtml}</p>`; // Start with the bulleted paragraph
+
+        let lookaheadIndex = i + 1;
+        // Check for subsequent paragraphs that belong to this list item
+        while (
+          lookaheadIndex < content.length &&
+          content[lookaheadIndex].paragraph &&
+          !content[lookaheadIndex].paragraph.bullet && // Must not be another bullet point
+          (content[lookaheadIndex].paragraph.paragraphStyle?.indentStart?.magnitude > 0) // Must be indented
+        ) {
+          const contentParagraph = content[lookaheadIndex].paragraph;
+          const contentHtml = (contentParagraph.elements || []).map(processTextRun).join('').replace(/\v/g, '<br>');
+          
+          if (contentHtml.trim() !== '') {
+            fullListItemContent += `<p>${contentHtml}</p>`;
+          } else {
+            fullListItemContent += `<p>&nbsp;</p>`; // Handle blank lines
+          }
+          
+          lookaheadIndex++; // Consume this paragraph
+        }
+        
+        html += `<li>${fullListItemContent}</li>`;
+
+        // Jump the main loop forward past the paragraphs we just consumed
+        i = lookaheadIndex - 1;
       }
     }
   }
 
-  if (inList) {
-    html += `</ul>`;
+  // Close any list that's still open at the end of the document
+  if (currentList) {
+    html += `</${currentList.tag}>`;
   }
 
   return html.trim();
