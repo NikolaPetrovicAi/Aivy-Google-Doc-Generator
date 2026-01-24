@@ -2,10 +2,10 @@
 const OpenAI = require("openai");
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-async function generatePlan({ topic, docType, tone, details, language, pages }) {
+async function generatePlan({ topic, detailLevel, language, pages }) {
   const prompt = `
 Ti si AI planer dokumenata.
-Tvoj zadatak je da napraviš jasan i strukturiran plan za dokument, podeljen po stranicama.
+Tvoj zadatak je da napraviš jasan i strukturiran plan za Google Doc dokument, podeljen po stranicama.
 Ako korisnikov zahtev implicira poređenje, statistiku ili numeričke podatke, OBAVEZNO uključi i grafikon ('chart') u plan.
 
 Odgovor MORA biti JSON format koji prati ovu strukturu:
@@ -42,9 +42,8 @@ Odgovor MORA biti JSON format koji prati ovu strukturu:
 
 Kreiraj plan za sledeći dokument:
 Tema: ${topic}
-Tip dokumenta: ${docType}
-Ton: ${tone}
-Detaljnost: ${details}
+Tip dokumenta: Google Doc
+Detaljnost: ${detailLevel}
 Jezik: ${language}
 Broj strana: ${pages}
 `;

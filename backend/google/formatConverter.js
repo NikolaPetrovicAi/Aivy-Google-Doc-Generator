@@ -38,11 +38,27 @@ function processTextRun(element) {
     styles.push(`background-color: ${rgbToHex(red, green, blue)}`);
   }
 
+  if (textStyle.weightedFontFamily?.fontFamily) {
+    styles.push(`font-family: '${textStyle.weightedFontFamily.fontFamily}'`);
+  }
+
   if (styles.length > 0) {
     return `<span style="${styles.join('; ')}">${text}</span>`;
   }
 
   return text;
+}
+
+function getAlignmentStyle(alignment) {
+  if (!alignment) return '';
+  const map = {
+    'START': 'left',
+    'CENTER': 'center',
+    'END': 'right',
+    'JUSTIFIED': 'justify'
+  };
+  const cssValue = map[alignment.toUpperCase()];
+  return cssValue ? ` style="text-align: ${cssValue};"` : '';
 }
 
 
@@ -66,6 +82,9 @@ function googleDocsToHtml(doc) {
       const paragraph = item.paragraph;
       const bullet = paragraph.bullet;
       
+      const align = paragraph.paragraphStyle?.alignment;
+      const alignStyle = getAlignmentStyle(align);
+
       let innerHtml = (paragraph.elements || []).map(processTextRun).join('');
       innerHtml = innerHtml.replace(/\v/g, '<br>');
 
@@ -80,11 +99,11 @@ function googleDocsToHtml(doc) {
         const styleType = paragraph.paragraphStyle?.namedStyleType || 'NORMAL_TEXT';
         if (styleType.startsWith('HEADING_')) {
           const level = styleType.split('_')[1];
-          html += `<h${level}>${innerHtml}</h${level}>`;
+          html += `<h${level}${alignStyle}>${innerHtml}</h${level}>`;
         } else {
             const isBlankLine = innerHtml.trim() === '';
             if (i === content.length - 1 && isBlankLine) continue; // Skip final blank line
-            html += `<p>${isBlankLine ? '&nbsp;' : innerHtml}</p>`;
+            html += `<p${alignStyle}>${isBlankLine ? '&nbsp;' : innerHtml}</p>`;
         }
       } else { // This paragraph is a list item
         const listId = bullet.listId;
@@ -105,7 +124,7 @@ function googleDocsToHtml(doc) {
         }
 
         // --- LOOKAHEAD LOGIC TO BUILD FULL LIST ITEM CONTENT ---
-        let fullListItemContent = `<p>${innerHtml}</p>`; // Start with the bulleted paragraph
+        let fullListItemContent = `<p${alignStyle}>${innerHtml}</p>`; // Start with the bulleted paragraph
 
         let lookaheadIndex = i + 1;
         // Check for subsequent paragraphs that belong to this list item
@@ -116,12 +135,15 @@ function googleDocsToHtml(doc) {
           (content[lookaheadIndex].paragraph.paragraphStyle?.indentStart?.magnitude > 0) // Must be indented
         ) {
           const contentParagraph = content[lookaheadIndex].paragraph;
+          const contentAlign = contentParagraph.paragraphStyle?.alignment;
+          const contentAlignStyle = getAlignmentStyle(contentAlign);
+
           const contentHtml = (contentParagraph.elements || []).map(processTextRun).join('').replace(/\v/g, '<br>');
           
           if (contentHtml.trim() !== '') {
-            fullListItemContent += `<p>${contentHtml}</p>`;
+            fullListItemContent += `<p${contentAlignStyle}>${contentHtml}</p>`;
           } else {
-            fullListItemContent += `<p>&nbsp;</p>`; // Handle blank lines
+            fullListItemContent += `<p${contentAlignStyle}>&nbsp;</p>`; // Handle blank lines
           }
           
           lookaheadIndex++; // Consume this paragraph

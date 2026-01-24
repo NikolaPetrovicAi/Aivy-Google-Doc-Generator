@@ -12,6 +12,7 @@ interface EditorToolbarProps {
 const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, onSave, isSaving }) => {
   const [textColor, setTextColor] = useState('#000000');
   const [highlightColor, setHighlightColor] = useState('#ffffff');
+  const [currentFont, setCurrentFont] = useState('');
 
   const debouncedTextColor = useDebounce(textColor, 500);
   const debouncedHighlightColor = useDebounce(highlightColor, 500);
@@ -30,21 +31,24 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, onSave, isSaving 
   };
 
 
-  // Function to update color swatches based on editor state
-  const updateColorSwatches = useCallback(() => {
+  // Function to update color swatches and font based on editor state
+  const updateEditorState = useCallback(() => {
     if (!editor) return;
     const { from, to, empty } = editor.state.selection;
 
     let textColor: string | undefined = undefined;
     let highlightColor: string | undefined = undefined;
+    let fontFamily: string | undefined = undefined;
 
     if (empty) { // It's a cursor
       const marks = editor.getAttributes('textStyle');
       textColor = marks.color;
       highlightColor = marks.backgroundColor;
+      fontFamily = marks.fontFamily;
     } else { // It's a selection
       const textColors = new Set<string>();
       const highlightColors = new Set<string>();
+      const fontFamilies = new Set<string>();
 
       editor.state.doc.nodesBetween(from, to, (node) => {
         if (node.isText) {
@@ -55,6 +59,9 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, onSave, isSaving 
               }
               if (mark.attrs.backgroundColor) {
                 highlightColors.add(mark.attrs.backgroundColor);
+              }
+              if (mark.attrs.fontFamily) {
+                fontFamilies.add(mark.attrs.fontFamily);
               }
             }
           });
@@ -67,6 +74,9 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, onSave, isSaving 
       if (highlightColors.size === 1) {
         highlightColor = highlightColors.values().next().value;
       }
+      if (fontFamilies.size === 1) {
+        fontFamily = fontFamilies.values().next().value;
+      }
     }
     
     // Convert to hex before setting state for the color input
@@ -77,6 +87,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, onSave, isSaving 
     // For highlight, if the color is white, we might want to show white, but if it's undefined, also white.
     // The input doesn't support transparency, so we just use white.
     setHighlightColor(finalHighlightColor === '#ffffff' ? '#ffffff' : finalHighlightColor);
+    setCurrentFont(fontFamily || '');
 
   }, [editor]);
 
@@ -95,11 +106,11 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, onSave, isSaving 
     }
   }, [debouncedHighlightColor, editor]);
 
-  // Update swatches on selection or content change
+  // Update swatches and font on selection or content change
   useEffect(() => {
     if (editor) {
       const handleInitialUpdate = () => {
-        updateColorSwatches();
+        updateEditorState();
         // Remove this listener so it only runs once after the first content update
         editor.off('update', handleInitialUpdate);
       };
@@ -107,14 +118,14 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, onSave, isSaving 
       // Listen for the first update, which happens after initial content is set
       editor.on('update', handleInitialUpdate);
       // Still listen for selection changes for subsequent user actions
-      editor.on('selectionUpdate', updateColorSwatches);
+      editor.on('selectionUpdate', updateEditorState);
       
       return () => {
         editor.off('update', handleInitialUpdate);
-        editor.off('selectionUpdate', updateColorSwatches);
+        editor.off('selectionUpdate', updateEditorState);
       };
     }
-  }, [editor, updateColorSwatches]);
+  }, [editor, updateEditorState]);
 
 
   const getButtonClass = useCallback((isActive: boolean) => {
@@ -173,6 +184,25 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, onSave, isSaving 
       >
         Strike
       </button>
+
+      <div className="h-5 w-px bg-gray-300 mx-2"></div>
+
+      <select
+        onChange={(e) => {
+          const font = e.target.value;
+          if (font) {
+            editor.chain().focus().setFontFamily(font).run();
+          }
+        }}
+        value={currentFont}
+        className="h-8 px-2 rounded-md text-sm border-gray-300 bg-white text-gray-700 hover:bg-gray-50 border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+        title="Select Font Family"
+      >
+        <option value="" disabled>Font</option>
+        <option value="Merriweather">Merriweather</option>
+        <option value="Lato">Lato</option>
+        <option value="Montserrat">Montserrat</option>
+      </select>
 
       <div className="h-5 w-px bg-gray-300 mx-2"></div>
       

@@ -10,7 +10,7 @@ import { useAuthCheck } from '../hooks/useAuthCheck';
 
 // Define the types for the form state and the plan
 interface FormState {
-  docType: 'doc' | 'presentation' | 'sheet' | '';
+  docType: 'doc';
   topic: string;
   pages: string; // Use string for select value
   language: string;
@@ -31,7 +31,7 @@ export default function GenerateDocumentPage() {
   
   const router = useRouter(); // Instantiate the router
   const [formState, setFormState] = useState<FormState>({
-    docType: '',
+    docType: 'doc',
     topic: '',
     pages: '1',
     language: 'English',
@@ -45,8 +45,8 @@ export default function GenerateDocumentPage() {
   const debouncedTopic = useDebounce(formState.topic, 750);
 
   const isSectionOneComplete = useMemo(() => {
-    return formState.docType !== '' && formState.topic.trim() !== '' && formState.pages !== '' && formState.language !== '';
-  }, [formState.docType, formState.topic, formState.pages, formState.language]);
+    return formState.topic.trim() !== '' && formState.pages !== '' && formState.language !== '';
+  }, [formState.topic, formState.pages, formState.language]);
 
   useEffect(() => {
     if (!isSectionOneComplete || !debouncedTopic) {
@@ -126,24 +126,10 @@ export default function GenerateDocumentPage() {
       </Link>
       <div className="flex flex-grow bg-gray-50 h-full">
         {/* Left Column: Form */}
-        <div className="w-1/2 p-6 flex justify-center items-start overflow-y-auto">
+        <div className="w-1/2 p-6 pt-24 flex justify-center items-start overflow-y-auto">
           <div className="w-full max-w-md space-y-8">
             {/* Section 1 */}
             <div className="space-y-6">
-              <div className="flex justify-center space-x-2">
-                {(['doc', 'presentation', 'sheet'] as const).map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => setFormState(s => ({ ...s, docType: type }))}
-                    className={`px-6 py-2 rounded-md text-sm font-semibold capitalize transition-colors ${
-                      formState.docType === type
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white text-gray-700 hover:bg-gray-100 border'
-                    }`}>
-                    {type}
-                  </button>
-                ))}
-              </div>
               <textarea
                 value={formState.topic}
                 onChange={(e) => setFormState(s => ({ ...s, topic: e.target.value }))}

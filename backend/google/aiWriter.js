@@ -2,7 +2,7 @@
 const OpenAI = require("openai");
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-async function generatePage({ page, title, summary, elements, tone, language }) {
+async function generatePage({ page, title, summary, elements, detailLevel, language }) {
 
   // The new, detailed system prompt that enforces JSON output and defines the templates.
   const systemPrompt = `
@@ -84,7 +84,7 @@ Generate content for page ${page} of the document.
 - Document Title: ${title}
 - Summary: ${summary}
 - Key Elements to include: ${elements?.join(", ") || "none"}
-- Tone of voice: ${tone}
+- Detail Level: ${detailLevel}
 - Language: ${language}
 `;
 

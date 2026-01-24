@@ -72,6 +72,11 @@ function getBlockLevelNodes(rootNode, window, currentListLevel = 0, currentListT
             const liType = currentListType;
 
             const virtualLiNode = window.document.createElement('li');
+            // Propagate text-align style from the original li to the virtual li
+            if (childElement.style.textAlign) {
+                virtualLiNode.style.textAlign = childElement.style.textAlign;
+            }
+            
             let childParagraphs = [];
 
             for (const liChild of childElement.childNodes) {
@@ -146,6 +151,15 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
                         const backColor = parseColor(node.style.backgroundColor);
                         if (backColor) {
                             newStyles.backgroundColor = { color: { rgbColor: backColor } };
+                        }
+                        if (node.style.fontFamily) {
+                            const font = node.style.fontFamily.split(',')[0].trim().replace(/['"]/g, '');
+                            if (font) {
+                                newStyles.weightedFontFamily = {
+                                    fontFamily: font,
+                                    weight: 400
+                                };
+                            }
                         }
                     }
                     break;
@@ -330,6 +344,16 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
                     const indentLevel = item.isChildParagraph ? item.listLevel + 1 : item.listLevel;
                     itemStyle.indentStart = { magnitude: 18 * indentLevel, unit: 'PT' };
                     itemFields.push('indentStart');
+                }
+
+                // Handle Alignment for List Items
+                if (item.alignment) {
+                    const alignmentMap = { left: 'START', center: 'CENTER', right: 'END', justify: 'JUSTIFIED' };
+                    const apiAlignment = alignmentMap[item.alignment.toLowerCase()];
+                    if (apiAlignment) {
+                        itemStyle.alignment = apiAlignment;
+                        itemFields.push('alignment');
+                    }
                 }
 
                 // 2. Apply Indentation and other styles LAST.

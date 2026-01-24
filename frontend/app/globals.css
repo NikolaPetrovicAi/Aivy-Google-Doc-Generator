@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700;1,900&family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -46,19 +47,94 @@ body {
   font-size: 0.67em;
   font-weight: bold;
 }
+
+/* 
+   CUSTOM LIST STYLING STRATEGY
+   To allow independent alignment of list markers and content, we disable 
+   native list styles and use CSS counters/pseudo-elements attached to the 
+   paragraph itself.
+*/
+
+/* 1. Hide native markers */
 .ProseMirror ul, .ProseMirror ol {
-  padding-left: 2.5rem;
+  padding-left: 1.5rem; /* Reduced padding since marker is now inside */
+  list-style-type: none !important;
 }
-.ProseMirror ul {
-  list-style-type: disc;
-}
+
+/* 2. Setup counters for Ordered Lists */
 .ProseMirror ol {
-  list-style-type: decimal;
+  counter-reset: prose-ol;
 }
-/* This is the key fix: ensure li elements are treated as list items */
+
 .ProseMirror li {
-  display: list-item;
+  position: relative;
+  /* display: list-item is default, but we treat it as a block container now */
+}
+
+/* Increment counter for each LI in an OL */
+.ProseMirror ol > li {
+  counter-increment: prose-ol;
+}
+
+/* 3. The Marker Logic - Attached to the FIRST paragraph of the list item */
+
+/* BULLET POINTS (UL) */
+.ProseMirror ul > li > p:first-child::before {
+  content: "•";
+  display: inline-block;
+  width: 1.5em; /* Fixed width for alignment */
+  margin-left: -1.5em; /* Pull it back into the padding area */
+  text-align: center;
+  /* Ensure it doesn't get messed up by text alignment of the P */
+}
+
+/* NUMBERED LISTS (OL) */
+.ProseMirror ol > li > p:first-child::before {
+  content: counter(prose-ol) ".";
+  display: inline-block;
+  min-width: 1.5em;
+  margin-left: -1.5em; /* Pull back */
+  padding-right: 0.5em;
+  text-align: right; 
+  /* For numbers, right align so "10." aligns with "9." nicely */
 }
 
 
+/* 4. HANDLING ALIGNMENT (The Magic Fix) */
 
+/* 
+   When the paragraph is ALIGNED (Center/Right/Justify), we disable the 
+   negative margin "pull back" so the marker sits naturally next to the text.
+   This makes the marker flow WITH the text.
+*/
+
+/* Right Alignment */
+.ProseMirror li p[style*="text-align: right"]::before,
+.ProseMirror li p[style*="text-align: end"]::before {
+  margin-left: 0 !important;
+  margin-right: 0.5em; /* Add little space between marker and text */
+}
+
+/* Center Alignment */
+.ProseMirror li p[style*="text-align: center"]::before {
+  margin-left: 0 !important;
+  margin-right: 0.5em;
+}
+
+/* Justify - treat like left for now, or flow with it */
+.ProseMirror li p[style*="text-align: justify"]::before {
+  /* Keep default hanging indent for justify usually looks better, 
+     but if user wants it inside, we can reset. Let's keep default for justify. */
+}
+
+
+/* 
+   NESTED LISTS: Reset counters properly 
+   This handles multilevel lists (1, 1.1, etc or just 1, 1, 1 restarting)
+*/
+.ProseMirror ol li ol {
+  counter-reset: prose-ol;
+}
+.ProseMirror ol li ul {
+  /* No reset needed for bullets */
+}

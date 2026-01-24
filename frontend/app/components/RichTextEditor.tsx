@@ -3,6 +3,7 @@ import StarterKit from '@tiptap/starter-kit';
 import TextAlign from '@tiptap/extension-text-align';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
+import FontFamily from '@tiptap/extension-font-family';
 import Highlight from '@tiptap/extension-highlight';
 import React, { useEffect } from 'react';
 
@@ -31,12 +32,13 @@ const RichTextEditor = ({
           depth: 100,
         },
         // Enable trailing node to fix list editing UX
-        trailingNode: true,
+        trailingNode: {},
       }),
       TextAlign.configure({
         types: ['heading', 'paragraph'],
       }),
       TextStyle,
+      FontFamily,
       Color,
       Highlight.configure({ multicolor: true }),
     ],

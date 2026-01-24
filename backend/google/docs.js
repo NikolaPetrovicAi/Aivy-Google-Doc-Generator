@@ -171,12 +171,12 @@ router.post("/generate-doc", async (req, res) => {
 // ... other AI routes also remain unchanged ...
 
 async function createGoogleDocFromPlan(authClient, plan, formData) {
-  const { topic, tone, language } = formData;
+  const { topic, detailLevel, language, font } = formData;
   const docs = google.docs({ version: "v1", auth: authClient });
   const drive = google.drive({ version: "v3", auth: authClient });
 
   // 1. Create the document
-  console.log(`Creating document with title: ${topic}`);
+  console.log(`Creating Google Doc: ${topic}`);
   const fileMetadata = {
     name: topic || "Novi AI Dokument",
     mimeType: "application/vnd.google-apps.document",
@@ -186,20 +186,20 @@ async function createGoogleDocFromPlan(authClient, plan, formData) {
     fields: "id",
   });
   const documentId = file.data.id;
-  console.log(`✅ Document created with ID: ${documentId}`);
+  console.log(`Document created with ID: ${documentId}`);
 
   // 2. Generate content and requests for all pages
   let allRequests = [];
   let currentIndex = 1;
 
   for (const page of plan) {
-    console.log(`📝 Generišem stranu ${page.page}: ${page.title}`);
+    console.log(`Generating content for page ${page.page}: ${page.title}`);
     const pageContent = await generatePage({
       page: page.page,
       title: page.title,
       summary: page.summary,
       elements: page.elements,
-      tone: tone,
+      detailLevel: detailLevel,
       language: language,
     });
     
@@ -211,8 +211,28 @@ async function createGoogleDocFromPlan(authClient, plan, formData) {
     }
   }
 
-  console.log("✍️ Writing content to Google Doc...");
-  // 3. Write the full content to the document
+  // 3. Apply the selected font if provided
+  if (font && currentIndex > 1) {
+      console.log(`Applying font: ${font}`);
+      allRequests.push({
+          updateTextStyle: {
+              range: {
+                  startIndex: 1,
+                  endIndex: currentIndex,
+              },
+              textStyle: {
+                  weightedFontFamily: {
+                      fontFamily: font,
+                      weight: 400,
+                  },
+              },
+              fields: 'weightedFontFamily',
+          },
+      });
+  }
+
+  console.log("Writing content to document...");
+  // 4. Write the full content to the document
   if (allRequests.length > 0) {
     await docs.documents.batchUpdate({
       documentId,
@@ -222,7 +242,7 @@ async function createGoogleDocFromPlan(authClient, plan, formData) {
     });
   }
 
-  console.log("✅ Content written successfully.");
+  console.log("Document generation complete.");
   return documentId;
 }
 
