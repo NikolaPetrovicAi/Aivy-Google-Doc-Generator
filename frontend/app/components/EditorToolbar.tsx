@@ -16,6 +16,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, onSave, isSaving 
 
   const debouncedTextColor = useDebounce(textColor, 500);
   const debouncedHighlightColor = useDebounce(highlightColor, 500);
+  const [, setTick] = useState(0);
 
   // Function to convert rgb/rgba to hex. Handles passthrough of hex colors.
   const toHex = (colorStr: string): string => {
@@ -34,6 +35,10 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, onSave, isSaving 
   // Function to update color swatches and font based on editor state
   const updateEditorState = useCallback(() => {
     if (!editor) return;
+    
+    // Force re-render to update button states (isActive checks)
+    setTick(t => t + 1);
+
     const { from, to, empty } = editor.state.selection;
 
     let textColor: string | undefined = undefined;
@@ -109,20 +114,12 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, onSave, isSaving 
   // Update swatches and font on selection or content change
   useEffect(() => {
     if (editor) {
-      const handleInitialUpdate = () => {
-        updateEditorState();
-        // Remove this listener so it only runs once after the first content update
-        editor.off('update', handleInitialUpdate);
-      };
-
-      // Listen for the first update, which happens after initial content is set
-      editor.on('update', handleInitialUpdate);
-      // Still listen for selection changes for subsequent user actions
-      editor.on('selectionUpdate', updateEditorState);
+      updateEditorState();
+      
+      editor.on('transaction', updateEditorState);
       
       return () => {
-        editor.off('update', handleInitialUpdate);
-        editor.off('selectionUpdate', updateEditorState);
+        editor.off('transaction', updateEditorState);
       };
     }
   }, [editor, updateEditorState]);
@@ -292,6 +289,13 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, onSave, isSaving 
         className={getButtonClass(editor.isActive('bulletList'))}
       >
         Bullet List
+      </button>
+      <button
+        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        disabled={!editor.can().chain().focus().toggleOrderedList().run()}
+        className={getButtonClass(editor.isActive('orderedList'))}
+      >
+        Numbered List
       </button>
       
       <div className="flex-grow"></div>

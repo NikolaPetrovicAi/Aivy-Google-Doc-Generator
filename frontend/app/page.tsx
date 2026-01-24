@@ -22,7 +22,7 @@ export default function Home() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const observer = useRef<IntersectionObserver>();
+  const observer = useRef<IntersectionObserver>(null);
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
 

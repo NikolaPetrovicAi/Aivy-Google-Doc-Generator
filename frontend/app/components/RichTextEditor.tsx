@@ -28,11 +28,7 @@ const RichTextEditor = ({
     immediatelyRender: false,
     extensions: [
       StarterKit.configure({
-        history: {
-          depth: 100,
-        },
-        // Enable trailing node to fix list editing UX
-        trailingNode: {},
+        // StarterKit sub-extension configurations
       }),
       TextAlign.configure({
         types: ['heading', 'paragraph'],
@@ -54,7 +50,7 @@ const RichTextEditor = ({
 
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content, false); // false prevents triggering an update loop
+      editor.commands.setContent(content, { emitUpdate: false }); // prevents triggering an update loop
     }
   }, [content, editor]);
 
