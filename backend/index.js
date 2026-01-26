@@ -10,6 +10,7 @@ const axios = require("axios");
 
 const { router: docsRouter, createGoogleDocFromPlan, createGoogleDoc } = require("./google/docs.js");
 const { generatePlan } = require("./google/aiPlanner.js");
+const { processText } = require("./google/aiEditor.js");
 
 
 const app = express();
@@ -69,6 +70,20 @@ app.post("/api/generate-plan", async (req, res) => {
   } catch (error) {
     console.error("Error generating plan:", error);
     res.status(500).json({ error: "Failed to generate plan" });
+  }
+});
+
+app.post("/api/ai/edit", requireAuth, async (req, res) => {
+  try {
+    const { text, command, language } = req.body;
+    if (!text || !command) {
+      return res.status(400).json({ error: "Text and command are required" });
+    }
+    const result = await processText({ text, command, language });
+    res.json({ result });
+  } catch (error) {
+    console.error("Error in /api/ai/edit:", error);
+    res.status(500).json({ error: "Failed to process text" });
   }
 });
 

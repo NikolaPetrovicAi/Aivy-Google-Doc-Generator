@@ -7,6 +7,7 @@ interface Plan {
     page: number;
     title: string;
     summary: string;
+    elements?: Array<{ type: string }>;
   }>;
 }
 
@@ -45,9 +46,18 @@ export default function PlanPreview({ plan, isLoading, fontName }: PlanPreviewPr
       <h2 className="text-xl font-bold mb-4">Document Plan</h2>
       <div className="space-y-4">
         {plan.pages.map((page) => (
-          <div key={page.page}>
+          <div key={page.page} className="border-l-2 border-blue-200 pl-4 py-1">
             <h3 className="font-semibold text-gray-800">Page {page.page}: {page.title}</h3>
-            <p className="text-sm text-gray-600 ml-2">- {page.summary}</p>
+            <p className="text-sm text-gray-600 mb-2">{page.summary}</p>
+            {page.elements && page.elements.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {page.elements.map((el, i) => (
+                  <span key={i} className="text-[10px] font-medium bg-blue-50 text-blue-600 px-2 py-0.5 rounded uppercase border border-blue-100">
+                    {el.type.replace('_BLOCK', '').replace('_LIST', '')}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>

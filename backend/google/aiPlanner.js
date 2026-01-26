@@ -4,45 +4,42 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 async function generatePlan({ topic, detailLevel, language, pages }) {
   const prompt = `
-Ti si AI planer dokumenata.
-Tvoj zadatak je da napraviš jasan i strukturiran plan za Google Doc dokument, podeljen po stranicama.
-Ako korisnikov zahtev implicira poređenje, statistiku ili numeričke podatke, OBAVEZNO uključi i grafikon ('chart') u plan.
+Ti si AI planer dokumenata. Tvoj zadatak je da napraviš jasan i strukturiran plan za Google Doc dokument.
 
-Odgovor MORA biti JSON format koji prati ovu strukturu:
+ANALIZA KONTEKSTA:
+Prvo analiziraj temu: "${topic}".
+1. Ako je tema NE-POSLOVNA (npr. recept, priča, esej, pismo, putovanje):
+   - KORISTI SAMO: "TEXT_BLOCK", "BULLET_POINTS_BLOCK", "STEP_BY_STEP_BLOCK".
+   - STROGO ZABRANJENO: "SWOT_LIST_BLOCK".
+2. Ako je tema POSLOVNA ili STRATEŠKA (npr. biznis plan, marketing strategija, analiza projekta):
+   - Možeš koristiti sve blokove, uključujući "SWOT_LIST_BLOCK" i "FAQ_BLOCK".
+
+OPIS BLOKOVA:
+1. "TEXT_BLOCK" - Univerzalan. Koristi za uvode, priče, opise.
+2. "BULLET_POINTS_BLOCK" - Univerzalan. Koristi za sastojke, liste mesta, karakteristike.
+3. "STEP_BY_STEP_BLOCK" - Univerzalan. Koristi za recepte, uputstva, vodiče.
+4. "FAQ_BLOCK" - Koristi samo ako je potrebno razjašnjenje (npr. pravila, podrška).
+5. "SWOT_LIST_BLOCK" - ISKLJUČIVO za biznis analizu.
+
+DODATNE INSTRUKCIJE:
+1. Kada pravis plan gde ce koji blok da ide nemoj da koristis jedan isti 2 puta zaredom moras da promenis na sledeci.
+
+Odgovor MORA biti JSON format:
 {
   "plan": [
     {
       "page": 1,
       "title": "Naslov stranice",
-      "summary": "Kratak opis sadržaja na ovoj stranici.",
+      "summary": "Kratak opis sadržaja.",
       "elements": [
-        { "type": "paragraph" },
-        { "type": "list" },
-        {
-          "type": "chart",
-          "chartType": "BAR",
-          "title": "Naslov Grafikona",
-          "data": [
-            ["Labela", "Vrednost"],
-            ["Stavka A", 10],
-            ["Stavka B", 20]
-          ]
-        }
+        { "type": "TEXT_BLOCK" }
       ]
     }
   ]
 }
 
-- 'elements' je niz objekata. Svaki objekat mora imati 'type'.
-- Mogući tipovi su: "paragraph", "list", "table", "quote", i "chart".
-- Ako je tip "chart", OBAVEZNO je dodati:
-  - "chartType": String, može biti "BAR", "PIE", ili "LINE".
-  - "title": String, naslov koji će biti prikazan iznad grafikona.
-  - "data": 2D niz (niz nizova) koji predstavlja podatke. Prvi pod-niz su uvek zaglavlja.
-
-Kreiraj plan za sledeći dokument:
+Kreiraj plan za:
 Tema: ${topic}
-Tip dokumenta: Google Doc
 Detaljnost: ${detailLevel}
 Jezik: ${language}
 Broj strana: ${pages}
