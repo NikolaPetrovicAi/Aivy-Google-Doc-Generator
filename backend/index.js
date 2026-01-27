@@ -75,11 +75,11 @@ app.post("/api/generate-plan", async (req, res) => {
 
 app.post("/api/ai/edit", requireAuth, async (req, res) => {
   try {
-    const { text, command, language } = req.body;
+    const { text, command, language, context } = req.body;
     if (!text || !command) {
       return res.status(400).json({ error: "Text and command are required" });
     }
-    const result = await processText({ text, command, language });
+    const result = await processText({ text, command, language, context });
     res.json({ result });
   } catch (error) {
     console.error("Error in /api/ai/edit:", error);
