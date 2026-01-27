@@ -39,16 +39,18 @@ ${text}
 `;
 
   try {
-    const res = await openai.chat.completions.create({
+    const stream = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
       temperature: 0.7,
+      max_tokens: 4000,
+      stream: true,
     });
 
-    return res.choices[0].message.content.trim();
+    return stream;
   } catch (error) {
     console.error("Error in processText:", error);
     throw error;

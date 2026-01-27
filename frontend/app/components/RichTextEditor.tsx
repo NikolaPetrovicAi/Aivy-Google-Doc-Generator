@@ -44,7 +44,10 @@ const RichTextEditor = ({
     content: content,
     editable,
     onUpdate: ({ editor }) => {
-      onPageUpdate(index, editor.getHTML());
+      // Skip frequent parent updates during AI streaming to prevent performance bottlenecks
+      if (!isAiProcessing) {
+        onPageUpdate(index, editor.getHTML());
+      }
     },
     onFocus: ({ editor }) => {
       onFocus(editor);
@@ -96,11 +99,39 @@ const RichTextEditor = ({
       });
 
       if (!response.ok) throw new Error('AI request failed');
-      const data = await response.json();
-      
-      if (data.result) {
-        editor.chain().focus().insertContentAt({ from, to }, data.result).run();
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('Response body is null');
+
+      const decoder = new TextDecoder();
+      let isFirstChunk = true;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+
+        if (isFirstChunk) {
+          editor.chain().focus().insertContentAt({ from, to }, chunk).run();
+          isFirstChunk = false;
+        } else {
+          editor.commands.insertContent(chunk);
+        }
       }
+
+      // Flush any remaining characters from the decoder
+      const finalChunk = decoder.decode();
+      if (finalChunk) {
+        if (isFirstChunk) {
+           editor.chain().focus().insertContentAt({ from, to }, finalChunk).run();
+        } else {
+           editor.commands.insertContent(finalChunk);
+        }
+      }
+      
+      onPageUpdate(index, editor.getHTML());
+      
     } catch (error) {
       console.error('Error calling AI:', error);
       alert('Failed to process text with AI.');

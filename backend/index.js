@@ -79,11 +79,33 @@ app.post("/api/ai/edit", requireAuth, async (req, res) => {
     if (!text || !command) {
       return res.status(400).json({ error: "Text and command are required" });
     }
-    const result = await processText({ text, command, language, context });
-    res.json({ result });
+
+    // Disable timeout for this request to handle long generations
+    req.socket.setTimeout(0);
+
+    // Streaming setup
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Transfer-Encoding", "chunked");
+
+    const stream = await processText({ text, command, language, context });
+
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || "";
+      if (content) {
+        res.write(content);
+      }
+    }
+    
+    res.end();
   } catch (error) {
-    console.error("Error in /api/ai/edit:", error);
-    res.status(500).json({ error: "Failed to process text" });
+    console.error("[AI Edit] STREAMING ERROR:", error.message);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to process text" });
+    } else {
+      // If headers were sent, we can't send a JSON error, but we can end the response.
+      // Optionally, we could append a distinct error marker if the client supported it.
+      res.end();
+    }
   }
 });
 
