@@ -38,7 +38,7 @@ Instead of generating free-form text, Aivy enforces a structured, schema-driven 
 
 ### Frontend
 - **Framework:** Next.js (App Router) with React.
-**Editor:** Tiptap (ProseMirror) with custom extensions for structured content, alignment, and AI-assisted editing.
+- **Editor:** Tiptap (ProseMirror) with custom extensions for structured content, alignment, and AI-assisted editing.
 - **Styling:** Tailwind CSS for consistent, utility-driven UI composition.
 
 ### Backend
