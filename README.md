@@ -19,14 +19,17 @@ Instead of generating free-form text, Aivy enforces a structured, schema-driven 
 
 ### 1. Deterministic AI → Document Structure Mapping
 **Problem:** Free-form AI outputs are difficult to reliably map onto the strictly hierarchical and index-sensitive Google Docs API, often resulting in malformed documents or fragile post-processing logic.
+
 **Solution:** Introduced a schema-constrained intermediate representation between the LLM and the Google Docs API. Using OpenAI Structured Outputs, the model is forced to generate a strictly typed document blueprint, guaranteeing structural validity before any API-level rendering occurs. This enables deterministic conversion from AI output into complex Google Docs update sequences without heuristic parsing.
 
 ### 2. HTML ↔ Google Docs Rendering Parity
 **Problem:** Achieving visual consistency between a browser-based rich-text editor and Google Docs is non-trivial due to fundamentally different rendering models and Google Docs’ implicit style inheritance behavior.
+
 **Solution:** Built a custom style translation layer that explicitly controls formatting order and overrides default inheritance rules. The system enforces deterministic spacing, indentation, and line breaks. For advanced alignment scenarios, list markers are rendered via calculated visual counters rather than native HTML lists, enabling precise left, center, and right alignment that matches Google Docs’ layout behavior.
 
 ### 3. High-Performance AI Streaming in Rich-Text
 **Problem:** Streaming AI-generated text directly into a rich-text editor caused excessive re-rendering and degraded performance, particularly during long generation sessions.
+
 **Solution:** Implemented a state isolation strategy where streaming updates are applied directly to the editor’s internal ProseMirror state, while React-level state synchronization occurs only after the stream completes. This allows smooth real-time generation without blocking the UI or triggering unnecessary re-renders.
 
 ---
