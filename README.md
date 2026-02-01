@@ -1,48 +1,48 @@
 # 🚀 Aivy Workspace: High-Fidelity AI Document Engine
 
-**Aivy Workspace** is an AI-powered document editor integrated with Google Doc. It utilizes a specialized dual-agent system—an AI Planner for structure and an AI Writer for content to build high quality documents. Featuring a custom rich-text interface with context aware AI tools built directly into the editor, it offers a complete environment for generating and refining content. Everything syncs instantly with your Google account. 
+**Aivy Workspace** is an AI-powered document editor for Google Docs designed to solve a core limitation of LLM-based writing tools: lack of structure, control, and determinism in long-form documents.
+
+Instead of generating free-form text, Aivy enforces a structured, schema-driven workflow where document layout is planned first and content is generated within strict architectural constraints. This enables reliable, high-fidelity document generation that integrates directly with real-world systems like the Google Docs API. 
 
 ---
 
 ## 🌟 Key Features
 
-*   **Dual-Agent AI Pipeline:** Utilizes a decoupled **Planner-Writer architecture**. The *Planner* acts as an architect to build a logical document structure, while the *Writer* acts as a specialist to execute content, ensuring coherent long-form documents.
-*   **Schema Enforced Generation:** Instead of unpredictable free text, the system leverages OpenAI’s **Structured Outputs (JSON Schema)**. This forces the LLM to adhere to strict data types and structural rules, guaranteeing 100% valid document architecture before rendering.
-*   **Dynamic Blueprints:** The AI intelligently selects from a library of logical blocks (e.g., standard text, bullet lists, headers) based on user intent, dynamically assembling a document structure that perfectly fits the specific topic.
-*   **Context-Isolated In-Editor AI:** A targeted AI assistant that understands the full document context for style consistency but strictly modifies only the user's selected range—preventing unwanted document-wide rewrites.
+*   **Planner–Writer Architecture:** A two-stage generation workflow where document structure is defined before content generation, ensuring predictable long-form output and preventing structural drift.
+*   **Schema-Constrained Generation:** All AI outputs are generated under strict structural constraints, guaranteeing valid document architecture and eliminating unreliable free-form text.
+*   **Dynamic Document Blueprints:** Documents are generated from predefined structural building blocks, allowing flexible layouts while maintaining a consistent and enforceable document architecture.
+*   **Context-Scoped In-Editor AI:** An embedded AI assistant that has full document awareness for style consistency, but is constrained to modify only the user-selected range—preventing unintended global edits.
 
 ---
 
 ## 🛠 Engineering Challenges & Solutions
 
-### 1. Robust AI to Document Mapping
-**Problem:** AI-generated Markdown is often unpredictable and hard to map to the strict hierarchical structure of the Google Docs API.
-**Solution:** Implemented a **Dynamic Blueprint** system. Using OpenAI's **Structured Outputs (`json_schema`)**, the system forces the LLM to generate content in a strictly typed JSON format. This ensures 100% reliability during the conversion process from raw AI output to complex Google Docs **structured API update sequences** requests.
+### 1. Deterministic AI → Document Structure Mapping
+**Problem:** Free-form AI outputs are difficult to reliably map onto the strictly hierarchical and index-sensitive Google Docs API, often resulting in malformed documents or fragile post-processing logic.
+**Solution:** Introduced a schema-constrained intermediate representation between the LLM and the Google Docs API. Using OpenAI Structured Outputs, the model is forced to generate a strictly typed document blueprint, guaranteeing structural validity before any API-level rendering occurs. This enables deterministic conversion from AI output into complex Google Docs update sequences without heuristic parsing.
 
-### 2. HTML ↔ Google Docs Parity Engine
-**Problem:** Achieving visual consistency between a web-based editor (HTML/CSS) and Google's proprietary document format is notoriously difficult due to conflicting rendering rules.
-**Solution:** Built a custom Style Translation Engine that bridges the gap between web standards and Google Docs. 
-- Strict Formatting Control: Engineered a sequence-based algorithm that overrides the API’s default "style inheritance" behavior, ensuring that spaces, breaks, and indentation appear exactly as intended by the user, not as guessed by Google.
-- Advanced List Alignment: Replaced standard web list markers with calculated visual counters. This ensures that bullet points and numbers strictly follow text alignment (Center/Right) in a way that standard HTML cannot handle natively.
+### 2. HTML ↔ Google Docs Rendering Parity
+**Problem:** Achieving visual consistency between a browser-based rich-text editor and Google Docs is non-trivial due to fundamentally different rendering models and Google Docs’ implicit style inheritance behavior.
+**Solution:** Built a custom style translation layer that explicitly controls formatting order and overrides default inheritance rules. The system enforces deterministic spacing, indentation, and line breaks. For advanced alignment scenarios, list markers are rendered via calculated visual counters rather than native HTML lists, enabling precise left, center, and right alignment that matches Google Docs’ layout behavior.
 
 ### 3. High-Performance AI Streaming in Rich-Text
-**Problem:** Updating the entire document state on every character during an AI stream caused massive re-render lag (choking the browser).
-**Solution:** Implemented a **State Isolation Strategy**. The editor updates its internal `ProseMirror` state during the stream, while the parent React state is only notified after the stream is flushed. This allows for smooth, real-time text generation.
+**Problem:** Streaming AI-generated text directly into a rich-text editor caused excessive re-rendering and degraded performance, particularly during long generation sessions.
+**Solution:** Implemented a state isolation strategy where streaming updates are applied directly to the editor’s internal ProseMirror state, while React-level state synchronization occurs only after the stream completes. This allows smooth real-time generation without blocking the UI or triggering unnecessary re-renders.
 
 ---
 
 ## 🏗 Architecture & Tech Stack
 
-### Frontend: Bleeding-Edge UI
-- **Framework:** Next.js 16 (App Router) & React 19.
-- **Styling:** Tailwind CSS v4 (Alpha) for ultra-fast builds and modern CSS features.
-- **Editor:** Tiptap v3 (ProseMirror) with custom extensions for color, alignment, and AI injection.
+### Frontend
+- **Framework:** Next.js (App Router) with React.
+**Editor:** Tiptap (ProseMirror) with custom extensions for structured content, alignment, and AI-assisted editing.
+- **Styling:** Tailwind CSS for consistent, utility-driven UI composition.
 
-### Backend: Scalable AI Orchestration
-- **Runtime:** Node.js (Express.js).
-- **AI Integration:** OpenAI API with streaming enabled and Structured Outputs.
-- **Cloud:** Google Workspace SDK (Docs, Drive, OAuth 2.0).
-- **Session Management:** `express-session` for secure, multi-user token persistence.
+### Backend
+- **Runtime:** Node.js with Express.
+- **AI Orchestration:** OpenAI API with streaming support and schema-constrained generation.
+- **Integrations:** Google Workspace APIs (Docs, Drive, OAuth 2.0).
+- **Session Management:** Secure multi-user session handling for OAuth tokens and editor state.
 
 ---
 
@@ -69,6 +69,6 @@
 ---
 
 ## 🔮 Future Improvements
-- [ ] **Project-Based Contextual Intelligence (RAG+):** Implementing "Aivy Projects" where users can group specific documents for the AI to index. The AI will act as a project-aware collaborator—capable of answering questions across multiple files and performing context-aware edits based on the entire project's knowledge base.
-- [ ] **Autonomous Reflection & Self-Correction:** Developing a "Critic" agent to review generated content against formatting standards and logical consistency, ensuring high-fidelity output and minimizing hallucinations through a multi-turn feedback loop.
-- [ ] **Live Web-Research Integration:** Enabling agents to use tool-calling for real-time web searches, allowing for fact-grounded drafting and automatic citation of up-to-date information, statistics, and sources.
+- **Project-Scoped Contextual Intelligence:** Introduce project-level context where related documents are grouped and indexed together, enabling the AI to perform cross-document reasoning, edits, and queries within a bounded knowledge space.
+- **Automated Consistency & Quality Checks:** Add a secondary review phase that evaluates generated content for structural consistency, formatting correctness, and logical coherence before final insertion, reducing error propagation in long-form documents.
+- **Automated Consistency & Quality Checks:** Add a secondary review phase that evaluates generated content for structural consistency, formatting correctness, and logical coherence before final insertion, reducing error propagation in long-form documents.
