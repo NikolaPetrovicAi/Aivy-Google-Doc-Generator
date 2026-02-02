@@ -1,77 +1,52 @@
 # 🚀 Aivy Workspace: High-Fidelity AI Document Engine
 
-**Aivy Workspace** is an AI-powered document editor for Google Docs designed to solve a core limitation of LLM-based writing tools: lack of structure, control, and determinism in long-form documents.
+**Aivy Workspace** is an AI-powered document editor for Google Docs focused on deterministic, structured long-form generation.
+It addresses a core limitation of LLM-based writing tools: unreliable structure and lack of control in real-world document workflows.
 
-Instead of generating free-form text, Aivy enforces a structured, schema-driven workflow where document layout is planned first and content is generated within strict architectural constraints. This enables reliable, high-fidelity document generation that integrates directly with real-world systems like the Google Docs API. 
+Instead of free-form text generation, Aivy enforces a plan-first, schema-constrained pipeline that enables predictable document generation and safe integration with production APIs.
 
 ---
 
 ## 🌟 Key Features
 
-*   **Planner–Writer Architecture:** A two-stage generation workflow where document structure is defined before content generation, ensuring predictable long-form output and preventing structural drift.
-*   **Schema-Constrained Generation:** All AI outputs are generated under strict structural constraints, guaranteeing valid document architecture and eliminating unreliable free-form text.
+*   **Plan-First Generation:** Document structure is defined before content generation, preventing structural drift in long-form documents.
+*   **Schema-Constrained Generation:** AI outputs are generated under strict structural constraints, ensuring valid and enforceable document architecture.
 *   **Dynamic Document Blueprints:** Documents are generated from predefined structural building blocks, allowing flexible layouts while maintaining a consistent and enforceable document architecture.
-*   **Context-Scoped In-Editor AI:** An embedded AI assistant that has full document awareness for style consistency, but is constrained to modify only the user-selected range—preventing unintended global edits.
+*   **Context-Aware In-Editor AI:** The in-editor AI has access to the full document context for coherence and style consistency, but is strictly limited to modifying only the user-selected range.
 
 ---
 
 ## 🛠 Engineering Challenges & Solutions
 
-### 1. Deterministic AI → Document Structure Mapping
-**Problem:** Free-form AI outputs are difficult to reliably map onto the strictly hierarchical and index-sensitive Google Docs API, often resulting in malformed documents or fragile post-processing logic.
+### 1. Deterministic AI → Google Docs Mapping
+Introduced a schema-based intermediate document representation that allows LLM outputs to be deterministically converted into Google Docs API update requests, eliminating brittle markdown parsing and heuristic post-processing.
 
-**Solution:** Introduced a schema-constrained intermediate representation between the LLM and the Google Docs API. Using OpenAI Structured Outputs, the model is forced to generate a strictly typed document blueprint, guaranteeing structural validity before any API-level rendering occurs. This enables deterministic conversion from AI output into complex Google Docs update sequences without heuristic parsing.
-
-### 2. HTML ↔ Google Docs Rendering Parity
-**Problem:** Achieving visual consistency between a browser-based rich-text editor and Google Docs is non-trivial due to fundamentally different rendering models and Google Docs’ implicit style inheritance behavior.
-
-**Solution:** Built a custom style translation layer that explicitly controls formatting order and overrides default inheritance rules. The system enforces deterministic spacing, indentation, and line breaks. For advanced alignment scenarios, list markers are rendered via calculated visual counters rather than native HTML lists, enabling precise left, center, and right alignment that matches Google Docs’ layout behavior.
+### 2. Rich-Text Editor ↔ Google Docs Rendering Parity
+Built a formatting translation layer to align rendering behavior between the web-based rich-text editor and Google Docs, ensuring consistent spacing, alignment, and list behavior.
 
 ### 3. High-Performance AI Streaming in Rich-Text
-**Problem:** Streaming AI-generated text directly into a rich-text editor caused excessive re-rendering and degraded performance, particularly during long generation sessions.
-
-**Solution:** Implemented a state isolation strategy where streaming updates are applied directly to the editor’s internal ProseMirror state, while React-level state synchronization occurs only after the stream completes. This allows smooth real-time generation without blocking the UI or triggering unnecessary re-renders.
+Implemented editor-level state isolation to stream AI-generated updated text into the document without triggering full editor re-renders, preserving responsiveness during long generation sessions.
 
 ---
 
-## 🏗 Architecture & Tech Stack
+## 🏗 Tech Stack (High Level)
 
 ### Frontend
-- **Framework:** Next.js (App Router) with React.
-- **Editor:** Tiptap (ProseMirror) with custom extensions for structured content, alignment, and AI-assisted editing.
-- **Styling:** Tailwind CSS for consistent, utility-driven UI composition.
-
-### Backend
-- **Runtime:** Node.js with Express.
-- **AI Orchestration:** OpenAI API with streaming support and schema-constrained generation.
-- **Integrations:** Google Workspace APIs (Docs, Drive, OAuth 2.0).
-- **Session Management:** Secure multi-user session handling for OAuth tokens and editor state.
+- **AI Orchestration:** OpenAI API with streaming and schema-constrained generation
+- **Editor:** Tiptap (ProseMirror)
+- **Frontend:** Next.js + React
+- **Backend:** Node.js (Express)
+- **Integrations:** Google Docs / Drive APIs, OAuth 2.0
 
 ---
 
-## 🚀 Installation & Setup
+## 🎯 Why This Project Matters
 
-### Prerequisites
-- Node.js 20+
-- Google Cloud Project with Docs/Drive APIs enabled.
-- OpenAI API Key.
+Aivy Workspace demonstrates AI systems engineering beyond prompt design, including:
 
-### Quick Start
-1. **Clone & Install:**
-   ```bash
-   git clone https://github.com/your-username/aivy-workspace
-   cd aivy-workspace
-   npm install && cd frontend && npm install && cd ../backend && npm install
-   ```
-2. **Environment Setup:** Create a `.env` in the `backend/` folder (see `.env.example`).
-3. **Run Locally:**
-   - **Backend:** `cd backend && node index.js`
-   - **Frontend:** `cd frontend && npm run dev`
-4. **Authenticate:** Visit `http://localhost:3000`. The application will automatically redirect you to the Google login page to link your account.
+- Controlled LLM pipelines
+- Intermediate representations
+- Real-time streaming constraints
+- Production API integration
 
----
-
-## 🔮 Future Improvements
-- **Project-Scoped Contextual Intelligence:** Introduce project-level context where related documents are grouped and indexed together, enabling the AI to perform cross-document reasoning, edits, and queries within a bounded knowledge space.
-- **Automated Consistency & Quality Checks:** Add a secondary review phase that evaluates generated content for structural consistency, formatting correctness, and logical coherence before final insertion, reducing error propagation in long-form documents.
-- **Automated Consistency & Quality Checks:** Add a secondary review phase that evaluates generated content for structural consistency, formatting correctness, and logical coherence before final insertion, reducing error propagation in long-form documents.
+This project reflects how LLMs can be safely embedded into real products where structure, correctness, and predictability matter.
