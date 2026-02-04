@@ -215,7 +215,7 @@ app.get("/ai-query", async (req, res) => {
 
 
 // ⚙️ Podesi model (po želji promeni u "gpt-4o" kad ti zatreba snažniji model)
-const ASSISTANT_MODEL = process.env.OPENAI_ASSISTANT_MODEL || "gpt-4o-mini";
+const ASSISTANT_MODEL = process.env.OPENAI_ASSISTANT_MODEL || "gpt-4o";
 
 // (Opcionalno) ako već imaš kreiranog assistenta, stavi ga u .env kao OPENAI_ASSISTANT_ID
 let ASSISTANT_ID = process.env.OPENAI_ASSISTANT_ID || null;

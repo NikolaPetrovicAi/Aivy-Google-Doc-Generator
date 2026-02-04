@@ -12,7 +12,7 @@ Use the provided 'Document Context' to understand the tone, style, and topic of 
 
 COMMANDS:
 - 'improve': Enhance the clarity, flow, and professionalism of the text.
-- 'shorten': Make the text more concise while retaining the key message.
+- 'shorten': Make the text alot shorter.
 - 'extend': Elaborate on the points made in the text to provide more depth.
 - 'fix_grammar': Correct spelling and grammar mistakes only.
 - 'tone_professional': Rewrite the text to sound more professional and formal.
@@ -40,7 +40,7 @@ ${text}
 
   try {
     const stream = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },

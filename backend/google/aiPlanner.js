@@ -46,7 +46,7 @@ Broj strana: ${pages}
 `;
 
   const res = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-4o",
     messages: [
       { role: "system", content: "Vrati JSON bez ikakvog dodatnog teksta ili objašnjenja, samo čist JSON objekat koji počinje sa '{'." },
       { role: "user", content: prompt },

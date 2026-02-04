@@ -94,8 +94,8 @@ Generate the JSON with the 'blocks' array matching the requested structure.
 `;
 
   try {
-    const res = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -105,7 +105,7 @@ Generate the JSON with the 'blocks' array matching the requested structure.
         json_schema: jsonSchema 
       },
     });
-    return res.choices[0].message.content;
+    return completion.choices[0].message.content;
   } catch (error) {
     console.error(`Error generating content for page "${title}":`, error);
     // Depending on desired behavior, you might:
