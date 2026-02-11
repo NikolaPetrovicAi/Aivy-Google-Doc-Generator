@@ -3,8 +3,6 @@ const express = require("express");
 const router = express.Router();
 const { google } = require("googleapis");
 const { requireAuth } = require("../middleware/auth");
-const fs = require('fs/promises'); // For debugging
-const path = require('path'); // For debugging
 
 
 // ========== AI INTEGRATION ========== 
@@ -192,13 +190,15 @@ async function createGoogleDocFromPlan(authClient, plan, formData) {
   let allRequests = [];
   let currentIndex = 1;
 
-  for (const page of plan) {
+  for (let i = 0; i < plan.length; i++) {
+    const page = plan[i];
     console.log(`Generating content for page ${page.page}: ${page.title}`);
     const pageContent = await generatePage({
       page: page.page,
       title: page.title,
       summary: page.summary,
       elements: page.elements,
+      targetAudience: formData.targetAudience,
       detailLevel: detailLevel,
       language: language,
     });
@@ -209,6 +209,37 @@ async function createGoogleDocFromPlan(authClient, plan, formData) {
       allRequests.push(...requests);
       currentIndex = endIndex;
     }
+
+      // Dodajemo prelom stranice nakon svake isplanirane strane, osim poslednje
+      if (i < plan.length - 1) {
+        console.log(`Adding Page Break after page ${page.page}`);
+        
+        allRequests.push({
+          deleteParagraphBullets: {
+            range: { startIndex: currentIndex - 1, endIndex: currentIndex }
+          }
+        });
+
+        allRequests.push({
+          insertPageBreak: {
+            location: { index: currentIndex - 1 }
+          }
+        });
+        
+        // EXPERIMENT: Attempt to explicitly create a new, empty paragraph after the page break.
+        // The page break and its own newline happen before/at `currentIndex`.
+        // We will insert another newline at `currentIndex` to see if it creates a valid paragraph for the next block.
+        allRequests.push({
+            insertText: {
+                text: '\n',
+                location: { index: currentIndex } 
+            }
+        });
+
+        // After insertPageBreak (adds 2 chars) and our explicit '\n' (adds 1 char), total 3 new chars.
+        // Increment currentIndex by 3 to correctly position it for the next page's content.
+        currentIndex += 3;
+      }
   }
 
   // 3. Apply the selected font if provided

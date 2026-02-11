@@ -65,7 +65,8 @@ app.get("/api/google-docs", requireAuth, async (req, res) => {
 
 app.post("/api/generate-plan", async (req, res) => {
   try {
-    const plan = await generatePlan(req.body);
+    const { topic, targetAudience, detailLevel, language, pages } = req.body;
+    const plan = await generatePlan({ topic, targetAudience, detailLevel, language, pages });
     res.json(plan);
   } catch (error) {
     console.error("Error generating plan:", error);
@@ -194,7 +195,7 @@ app.get("/ai-query", async (req, res) => {
   const userMessage = req.query.q || "";
   try {
     const response = await openai.responses.create({
-      model: "gpt-5-nano",
+      model: "gpt-4o-mini",
       input: `Izvuci ključne reči za Google Drive pretragu iz sledeće rečenice: "${userMessage}"`,
       store: false
     });
@@ -215,7 +216,7 @@ app.get("/ai-query", async (req, res) => {
 
 
 // ⚙️ Podesi model (po želji promeni u "gpt-4o" kad ti zatreba snažniji model)
-const ASSISTANT_MODEL = process.env.OPENAI_ASSISTANT_MODEL || "gpt-4o";
+const ASSISTANT_MODEL = process.env.OPENAI_ASSISTANT_MODEL || "gpt-4o-mini";
 
 // (Opcionalno) ako već imaš kreiranog assistenta, stavi ga u .env kao OPENAI_ASSISTANT_ID
 let ASSISTANT_ID = process.env.OPENAI_ASSISTANT_ID || null;
@@ -919,7 +920,17 @@ res.json({
 
 // ============ KRAJ — ASSISTANTS API NOVI CHAT DEO ============
 
+const { runDiagnosis } = require('./diagnose_table');
 
+app.get("/api/diagnose-table", requireAuth, async (req, res) => {
+  try {
+    await runDiagnosis(req.oauth2Client);
+    res.json({ message: "Diagnosis run. Check server console." });
+  } catch (error) {
+    console.error("Diagnosis endpoint error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 
 // Pokretanje servera

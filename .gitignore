@@ -11,6 +11,9 @@
 /backend/.env
 backend/google/tokens.json
 
+# Debug and Dev Tools
+backend/diagnose_table.js
+
 # Cache
 /backend/thumbnail_cache
 
@@ -30,3 +33,5 @@ gha-creds-*.json
 notes
 GEMINI.md
 .geminiignore
+
+dokumentacija/

@@ -31,8 +31,9 @@ function addParagraph(requests, text, index) {
  */
 function cleanItemText(text) {
     if (!text) return "";
-    // Remove starting: "1. ", "1) ", "- ", "* ", "• ", "1.", "a. ", "i. " etc.
-    return text.replace(/^((\d+|[a-zA-Z]|[ivxIVX]+)[\.\)]?|[\-\*\•])\s*/, "").trim();
+    // Remove starting: "1. ", "1) ", "- ", "* ", "• ", "a. ", "i. " etc.
+    // Fixed: The delimiter [. or )] is now mandatory for alphanumeric markers to avoid stripping the first letter of regular words.
+    return text.replace(/^(([0-9]+|[a-zA-Z]|[ivxIVX]+)[\.\)]|[\-\*\•])\s*/, "").trim();
 }
 
 /**
@@ -106,6 +107,106 @@ function markdownToGoogleDocsRequests(jsonString, initialIndex = 1) {
                         currentIndex += addList(requests, list_items, currentIndex, 'NUMBERED_DECIMAL_ALPHA_ROMAN');
                         break;
 
+                    case 'PROS_CONS_BLOCK':
+                        if (block.pros_cons) {
+                            currentIndex += addHeading(requests, 'Advantages', currentIndex, 'HEADING_4');
+                            currentIndex += addList(requests, block.pros_cons.pros, currentIndex);
+                            currentIndex += addHeading(requests, 'Disadvantages', currentIndex, 'HEADING_4');
+                            currentIndex += addList(requests, block.pros_cons.cons, currentIndex);
+                        }
+                        break;
+
+                    case 'KEY_TAKEAWAYS_BLOCK':
+                        if (list_items) {
+                            currentIndex += addHeading(requests, 'Key Takeaways', currentIndex, 'HEADING_4');
+                            currentIndex += addList(requests, list_items, currentIndex, 'BULLET_CHECKBOX');
+                        }
+                        break;
+
+                    case 'STATS_ROW_BLOCK':
+                        if (block.stats && Array.isArray(block.stats)) {
+                            const tableIndex = currentIndex;
+                            // 1. Insert Table 1x3
+                            requests.push({
+                                insertTable: {
+                                    rows: 1,
+                                    columns: 3,
+                                    location: { index: tableIndex }
+                                }
+                            });
+                            
+                            // Each cell in a new table initially has one empty paragraph (1 character: \n)
+                            // According to documentation, a newline is inserted BEFORE the table.
+                            // Indices relative to tableIndex:
+                            // tableIndex: \n (auto-inserted)
+                            // tableIndex + 1: [TS] (Table Start)
+                            // tableIndex + 2: [RS] (Row Start)
+                            // tableIndex + 3: [CS] (Cell 1 Start)
+                            // tableIndex + 4: [Cell 1 Content Start]
+                            
+                            // 1x3 table structure discovered indices:
+                            // Table Start (TS), Row Start (RS), Cell Start (CS), Cell Content (\n), Cell Boundary (CB), Cell End (CE), Row End (RE), Table End (TE)
+                            // Empty: [TS][RS][CS0][\n][CS1][\n][CS2][\n][RE][TE]
+                            // Indices relative to tableIndex (if tableIndex is 1 and auto-newline at 1 exists):
+                            // 2:TS, 3:RS, 4:CS0, 5:\n, 6:CS1, 7:\n, 8:CS2, 9:\n, 10:RE, 11:TE
+                            let cellOffsets = [4, 6, 8];
+                            for (let i = 0; i < 3; i++) {
+                                const stat = block.stats[i];
+                                const cellText = `${stat.value}\n${stat.label}`;
+                                const cellIndex = tableIndex + cellOffsets[i];
+
+                                requests.push({
+                                    insertText: {
+                                        location: { index: cellIndex },
+                                        text: cellText
+                                    }
+                                });
+
+                                // Style the Value (Bold, Larger)
+                                requests.push({
+                                    updateTextStyle: {
+                                        range: { startIndex: cellIndex, endIndex: cellIndex + stat.value.length },
+                                        textStyle: { bold: true, fontSize: { magnitude: 14, unit: 'PT' } },
+                                        fields: 'bold,fontSize'
+                                    }
+                                });
+
+                                // Center align the cell content (including the original \n that was pushed)
+                                requests.push({
+                                    updateParagraphStyle: {
+                                        range: { startIndex: cellIndex, endIndex: cellIndex + cellText.length + 1 },
+                                        paragraphStyle: { alignment: 'CENTER' },
+                                        fields: 'alignment'
+                                    }
+                                });
+
+                                // Update subsequent offsets based on inserted text length
+                                for (let j = i + 1; j < 3; j++) {
+                                    cellOffsets[j] += cellText.length;
+                                }
+                            }
+
+                            // Set column widths and make borders invisible
+                            requests.push({
+                                updateTableColumnProperties: {
+                                    tableStartLocation: { index: tableIndex + 1 },
+                                    columnIndices: [0, 1, 2],
+                                    tableColumnProperties: { 
+                                        width: { magnitude: 150, unit: 'PT' },
+                                        widthType: 'FIXED_WIDTH'
+                                    },
+                                    fields: 'width,widthType'
+                                }
+                            });
+                            
+                            // Total structural overhead: 10
+                            // Reverted to 10. The previous increase to 11 caused "Index must be less than end index" error.
+                            // 10 matches the correct insertion point (before the final newline).
+                            const totalTextLength = block.stats.reduce((acc, s) => acc + s.value.length + s.label.length + 1, 0);
+                            currentIndex += (totalTextLength + 10);
+                        }
+                        break;
+
                     case 'FAQ_BLOCK':
                         if (faqs && Array.isArray(faqs)) {
                             for (const faq of faqs) {
@@ -129,10 +230,10 @@ function markdownToGoogleDocsRequests(jsonString, initialIndex = 1) {
                     case 'SWOT_LIST_BLOCK':
                         if (swot_data) {
                             const sections = [
-                                { label: 'Snage (Strengths)', data: swot_data.strengths },
-                                { label: 'Slabosti (Weaknesses)', data: swot_data.weaknesses },
-                                { label: 'Prilike (Opportunities)', data: swot_data.opportunities },
-                                { label: 'Pretnje (Threats)', data: swot_data.threats }
+                                { label: 'Strengths', data: swot_data.strengths },
+                                { label: 'Weaknesses', data: swot_data.weaknesses },
+                                { label: 'Opportunities', data: swot_data.opportunities },
+                                { label: 'Threats', data: swot_data.threats }
                             ];
                             for (const section of sections) {
                                 currentIndex += addHeading(requests, section.label, currentIndex, 'HEADING_4');

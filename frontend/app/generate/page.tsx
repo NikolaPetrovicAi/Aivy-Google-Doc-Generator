@@ -12,6 +12,7 @@ import { useAuthCheck } from '../hooks/useAuthCheck';
 interface FormState {
   docType: 'doc';
   topic: string;
+  targetAudience: string;
   pages: string; // Use string for select value
   language: string;
   detailLevel: 'Minimal' | 'Concise' | 'Detailed' | 'Extensive' | '';
@@ -33,6 +34,7 @@ export default function GenerateDocumentPage() {
   const [formState, setFormState] = useState<FormState>({
     docType: 'doc',
     topic: '',
+    targetAudience: '',
     pages: '1',
     language: 'English',
     detailLevel: 'Detailed',
@@ -43,6 +45,7 @@ export default function GenerateDocumentPage() {
   const [isGeneratingDoc, setIsGeneratingDoc] = useState(false); // New state for doc generation
 
   const debouncedTopic = useDebounce(formState.topic, 750);
+  const debouncedAudience = useDebounce(formState.targetAudience, 750);
 
   const isSectionOneComplete = useMemo(() => {
     return formState.topic.trim() !== '' && formState.pages !== '' && formState.language !== '';
@@ -82,7 +85,7 @@ export default function GenerateDocumentPage() {
     };
 
     generatePlan();
-  }, [isSectionOneComplete, debouncedTopic, formState.pages, formState.language, formState.detailLevel, formState.docType, formState.font]);
+  }, [isSectionOneComplete, debouncedTopic, debouncedAudience, formState.pages, formState.language, formState.detailLevel, formState.docType, formState.font]);
 
   // Function to handle the final document generation
   const handleGenerateDocument = async () => {
@@ -136,6 +139,13 @@ export default function GenerateDocumentPage() {
                 className="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 placeholder="What is the document about?"
                 rows={3}
+              />
+              <input
+                type="text"
+                value={formState.targetAudience}
+                onChange={(e) => setFormState(s => ({ ...s, targetAudience: e.target.value }))}
+                className="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Who is this document for? (Target Audience)"
               />
               <div className="flex space-x-4">
                 <select
