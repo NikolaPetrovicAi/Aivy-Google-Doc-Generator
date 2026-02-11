@@ -191,11 +191,25 @@ function markdownToGoogleDocsRequests(jsonString, initialIndex = 1) {
                                 updateTableColumnProperties: {
                                     tableStartLocation: { index: tableIndex + 1 },
                                     columnIndices: [0, 1, 2],
-                                    tableColumnProperties: { 
+                                    tableColumnProperties: {
                                         width: { magnitude: 150, unit: 'PT' },
                                         widthType: 'FIXED_WIDTH'
                                     },
                                     fields: 'width,widthType'
+                                }
+                            });
+
+                            // Make all table borders invisible
+                            requests.push({
+                                updateTableCellStyle: {
+                                    tableStartLocation: { index: tableIndex + 1 },
+                                    tableCellStyle: {
+                                        borderTop: { dashStyle: 'SOLID', width: { magnitude: 0, unit: 'PT' }, color: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+                                        borderBottom: { dashStyle: 'SOLID', width: { magnitude: 0, unit: 'PT' }, color: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+                                        borderLeft: { dashStyle: 'SOLID', width: { magnitude: 0, unit: 'PT' }, color: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+                                        borderRight: { dashStyle: 'SOLID', width: { magnitude: 0, unit: 'PT' }, color: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+                                    },
+                                    fields: 'borderTop,borderBottom,borderLeft,borderRight'
                                 }
                             });
                             
