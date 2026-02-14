@@ -64,7 +64,7 @@ function getAlignmentStyle(alignment) {
 
 /**
  * Converts a full Google Docs document object to an HTML string.
- * This version correctly differentiates between ordered (numbered) and unordered (bullet) lists.
+ * This version correctly handles paragraphs, lists, and tables.
  * @param {object} doc - The full Google Docs document object.
  */
 function googleDocsToHtml(doc) {
@@ -77,6 +77,86 @@ function googleDocsToHtml(doc) {
 
   for (let i = 0; i < content.length; i++) {
     const item = content[i];
+
+    if (item.table) {
+      // Close any open list before starting a table
+      if (currentList) {
+        html += `</${currentList.tag}>`;
+        currentList = null;
+      }
+
+      const table = item.table;
+      let tableStyle = '';
+      
+      // Check if it's a layout table (invisible borders)
+      const firstCell = table.tableRows[0]?.tableCells[0];
+      const borderTop = firstCell?.tableCellStyle?.borderTop;
+      
+      // Detection logic: 
+      // 1. Missing width or magnitude 0
+      // 2. OR color is White (1, 1, 1) - common for our layout tables
+      const isWhite = borderTop?.color?.color?.rgbColor?.red === 1 && 
+                      borderTop?.color?.color?.rgbColor?.green === 1 && 
+                      borderTop?.color?.color?.rgbColor?.blue === 1;
+      
+      const isInvisible = !borderTop || !borderTop.width || borderTop.width.magnitude === 0 || isWhite;
+      
+      if (isInvisible) {
+        tableStyle = ' class="border-none" style="border-collapse: collapse; border: none; width: 100%;"';
+      } else {
+        tableStyle = ' style="border-collapse: collapse; width: 100%;" border="1"';
+      }
+
+      html += `<table${tableStyle}><tbody>`;
+
+      for (const row of table.tableRows) {
+        html += '<tr>';
+        for (const cell of row.tableCells) {
+          // Check cell width
+          let cellStyle = 'padding: 5px;';
+          const cellWidth = cell.tableCellStyle?.columnSpan > 1 ? null : null; // Simplified for now
+          
+          html += `<td style="${cellStyle}">`;
+          
+          // Process cell content recursively (simplified version of the main loop)
+          let cellHtml = '';
+          let cellList = null;
+          for (const cellItem of (cell.content || [])) {
+            if (cellItem.paragraph) {
+              const p = cellItem.paragraph;
+              const b = p.bullet;
+              const align = p.paragraphStyle?.alignment;
+              const alignStyle = getAlignmentStyle(align);
+              let inner = (p.elements || []).map(processTextRun).join('').replace(/\v/g, '<br>');
+
+              if (!b) {
+                if (cellList) { cellHtml += `</${cellList.tag}>`; cellList = null; }
+                const isBlank = inner.trim() === '';
+                cellHtml += `<p${alignStyle}>${isBlank ? '&nbsp;' : inner}</p>`;
+              } else {
+                const lid = b.listId;
+                if (!cellList || cellList.id !== lid) {
+                  if (cellList) { cellHtml += `</${cellList.tag}>`; }
+                  const lp = lists[lid].listProperties;
+                  const nl = lp.nestingLevels[b.nestingLevel || 0];
+                  const tag = ['DECIMAL', 'ALPHA', 'ROMAN'].includes(nl.glyphType || '') ? 'ol' : 'ul';
+                  cellHtml += `<${tag}>`;
+                  cellList = { id: lid, tag: tag };
+                }
+                cellHtml += `<li><p${alignStyle}>${inner}</p></li>`;
+              }
+            }
+          }
+          if (cellList) cellHtml += `</${cellList.tag}>`;
+          
+          html += cellHtml || '&nbsp;';
+          html += '</td>';
+        }
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+      continue;
+    }
 
     if (item.paragraph) {
       const paragraph = item.paragraph;

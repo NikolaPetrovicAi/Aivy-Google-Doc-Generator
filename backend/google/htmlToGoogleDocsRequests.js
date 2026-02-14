@@ -65,6 +65,25 @@ function getBlockLevelNodes(rootNode, window, currentListLevel = 0, currentListT
         const tagName = childElement.tagName.toLowerCase();
         if (['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
             nodes.push({ node: childElement, isListItem: false, listLevel: 0, listType: null, isChildParagraph: false });
+        } else if (tagName === 'table') {
+            const rows = [];
+            const trs = childElement.querySelectorAll('tr');
+            for (const tr of trs) {
+                const cells = [];
+                const tds = tr.querySelectorAll('td, th');
+                for (const td of tds) {
+                    cells.push({
+                        node: td,
+                        contentNodes: getBlockLevelNodes(td, window, 0, null)
+                    });
+                }
+                rows.push(cells);
+            }
+            nodes.push({
+                type: 'table',
+                node: childElement,
+                rows: rows
+            });
         } else if (tagName === 'ul' || tagName === 'ol') {
             nodes.push(...getBlockLevelNodes(childElement, window, currentListLevel + 1, tagName));
         } else if (tagName === 'li') {
@@ -179,111 +198,217 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
 	
     // Get all block-level nodes in correct document order
     const allBlockNodes = getBlockLevelNodes(body, dom.window);
+    let blocksInfo = []; // Stores info about paragraphs and tables
 
-    for (const blockInfo of allBlockNodes) {
-        const blockNode = blockInfo.node;
-        const isListItem = blockInfo.isListItem;
-        const listLevel = blockInfo.listLevel;
+    function processNodes(nodes, infoArray) {
+        for (const blockInfo of nodes) {
+            if (blockInfo.type === 'table') {
+                const tableData = {
+                    type: 'table',
+                    node: blockInfo.node,
+                    rows: []
+                };
 
-        const contentNodes = traverseAndExtract(blockNode, {});
-        
-        let plainText = '';
-        let inlineStyleSpans = []; // Stores { text, styles, startIndex, endIndex }
+                for (const row of blockInfo.rows) {
+                    const rowData = [];
+                    for (const cell of row) {
+                        const cellBlocks = [];
+                        processNodes(cell.contentNodes, cellBlocks);
+                        rowData.push({
+                            node: cell.node,
+                            blocks: cellBlocks
+                        });
+                    }
+                    tableData.rows.push(rowData);
+                }
+                infoArray.push(tableData);
+                continue;
+            }
 
-        // Aggregate text and styles for the current block
-        for (const item of contentNodes) {
-            if (item.type === 'text' && item.content !== undefined) {
-                const start = plainText.length;
-                plainText += item.content;
-                const end = plainText.length;
+            const blockNode = blockInfo.node;
+            const isListItem = blockInfo.isListItem;
+            const listLevel = blockInfo.listLevel;
 
-                if (Object.keys(item.styles).length > 0) {
-                    inlineStyleSpans.push({
-                        styles: item.styles,
-                        relativeStartIndex: start,
-                        relativeEndIndex: end,
-                    });
+            const contentNodes = traverseAndExtract(blockNode, {});
+            
+            let plainText = '';
+            let inlineStyleSpans = []; // Stores { text, styles, startIndex, endIndex }
+
+            // Aggregate text and styles for the current block
+            for (const item of contentNodes) {
+                if (item.type === 'text' && item.content !== undefined) {
+                    const start = plainText.length;
+                    plainText += item.content;
+                    const end = plainText.length;
+
+                    if (Object.keys(item.styles).length > 0) {
+                        inlineStyleSpans.push({
+                            styles: item.styles,
+                            relativeStartIndex: start,
+                            relativeEndIndex: end,
+                        });
+                    }
                 }
             }
-        }
 
-        // Handle empty paragraphs or list items carefully to ensure single newlines
-        if (plainText.trim() === '' && !isListItem) {
-            paragraphsInfo.push({
-                text: '\n', // Represents an empty paragraph in Google Docs
-                inlineStyles: [],
-                isListItem: false,
-                listLevel: 0,
-                listType: null,
-                isChildParagraph: false,
-                alignment: null,
-                tagName: 'p',
-            });
-        } else {
-            // Trim plainText to remove leading/trailing whitespace from parsing, then add a single newline.
-            // This prevents the "double newline" issue that was creating extra bullet points.
-            const finalText = plainText.trim() + '\n';
-            paragraphsInfo.push({
-                text: finalText,
-                inlineStyles: inlineStyleSpans,
-                isListItem: isListItem,
-                listLevel: listLevel,
-                listType: blockInfo.listType,
-                isChildParagraph: blockInfo.isChildParagraph,
-                tagName: blockNode.tagName.toLowerCase(), // Store the tag name
-                alignment: blockNode.style.textAlign || null,
-            });
+            // Handle empty paragraphs or list items carefully to ensure single newlines
+            if (plainText.trim() === '' && !isListItem) {
+                infoArray.push({
+                    type: 'paragraph',
+                    text: '\n', // Represents an empty paragraph in Google Docs
+                    inlineStyles: [],
+                    isListItem: false,
+                    listLevel: 0,
+                    listType: null,
+                    isChildParagraph: false,
+                    alignment: null,
+                    tagName: 'p',
+                });
+            } else {
+                // Trim plainText to remove leading/trailing whitespace from parsing, then add a single newline.
+                const finalText = plainText.trim() + '\n';
+                infoArray.push({
+                    type: 'paragraph',
+                    text: finalText,
+                    inlineStyles: inlineStyleSpans,
+                    isListItem: isListItem,
+                    listLevel: listLevel,
+                    listType: blockInfo.listType,
+                    isChildParagraph: blockInfo.isChildParagraph,
+                    tagName: blockNode.tagName.toLowerCase(), // Store the tag name
+                    alignment: blockNode.style.textAlign || null,
+                });
+            }
         }
     }
 
-    // Second pass: Generate API requests with absolute indices
+    processNodes(allBlockNodes, blocksInfo);
+
     let currentAbsoluteIndex = baseStartIndex;
     let requestsToProcess = [];
     let processedParagraphs = []; // Store info with calculated absolute indices
 
-    // 1. Generate Text Insertions and Inline Styles (and calculate indices)
-    for (const paraInfo of paragraphsInfo) {
-        const insertionStartIndex = currentAbsoluteIndex;
-        
-        // Insert the paragraph text
-        requestsToProcess.push({
-            type: 'insertText',
-            request: {
-                insertText: {
-                    location: { index: currentAbsoluteIndex },
-                    text: paraInfo.text,
-                }
-            },
-            absoluteIndex: currentAbsoluteIndex
-        });
-        currentAbsoluteIndex += paraInfo.text.length;
-        const insertionEndIndex = currentAbsoluteIndex;
+    function generateRequestsForBlocks(blocks, startIndex) {
+        let localIndex = startIndex;
 
-        // Add inline style requests
-        for (const span of paraInfo.inlineStyles) {
-            requestsToProcess.push({
-                type: 'updateTextStyle',
-                request: {
-                    updateTextStyle: {
-                        range: {
-                            startIndex: insertionStartIndex + span.relativeStartIndex,
-                            endIndex: insertionStartIndex + span.relativeEndIndex,
+        for (const block of blocks) {
+            if (block.type === 'table') {
+                const tableStartIndex = localIndex;
+                const rows = block.rows.length;
+                const cols = block.rows[0]?.length || 0;
+
+                // 1. Insert Table
+                requestsToProcess.push({
+                    type: 'insertTable',
+                    request: {
+                        insertTable: {
+                            rows,
+                            columns: cols,
+                            location: { index: tableStartIndex }
+                        }
+                    },
+                    absoluteIndex: tableStartIndex
+                });
+
+                const tableIndex = tableStartIndex + 1;
+                
+                if (rows === 1 && cols === 3) {
+                    // Offsets from tableIndex (which is tableStartIndex + 1, the TS element)
+                    // CS0 is at tableIndex + 2, content (\n) is at tableIndex + 3
+                    let currentCellOffset = 3;
+                    let totalCellTextLength = 0;
+                    for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            const cell = block.rows[r][c];
+                            const cellIndex = tableIndex + currentCellOffset;
+                            
+                            const cellResultIndex = generateRequestsForBlocks(cell.blocks, cellIndex);
+                            const cellTextLength = cellResultIndex - cellIndex;
+                            
+                            totalCellTextLength += cellTextLength;
+                            currentCellOffset += cellTextLength + 2;
+                        }
+                    }
+                    localIndex = tableStartIndex + 10 + totalCellTextLength;
+                } else {
+                    localIndex += (rows * cols * 2) + 5; 
+                }
+
+                const styleAttr = block.node.getAttribute('style') || '';
+                const classList = block.node.classList;
+                const isLayoutTable = 
+                    styleAttr.replace(/\s/g, '').includes('border:none') || 
+                    styleAttr.replace(/\s/g, '').includes('border-width:0') ||
+                    styleAttr.replace(/\s/g, '').includes('border-style:none') ||
+                    block.node.getAttribute('border') === '0' || 
+                    classList.contains('border-none') ||
+                    classList.contains('border-0');
+
+                if (isLayoutTable) {
+                    requestsToProcess.push({
+                        type: 'updateTableCellStyle',
+                        request: {
+                            updateTableCellStyle: {
+                                tableStartLocation: { index: tableIndex },
+                                tableCellStyle: {
+                                    borderTop: { dashStyle: 'SOLID', width: { magnitude: 0, unit: 'PT' }, color: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+                                    borderBottom: { dashStyle: 'SOLID', width: { magnitude: 0, unit: 'PT' }, color: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+                                    borderLeft: { dashStyle: 'SOLID', width: { magnitude: 0, unit: 'PT' }, color: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+                                    borderRight: { dashStyle: 'SOLID', width: { magnitude: 0, unit: 'PT' }, color: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+                                },
+                                fields: 'borderTop,borderBottom,borderLeft,borderRight'
+                            }
                         },
-                        textStyle: span.styles,
-                        fields: Object.keys(span.styles).join(','),
+                        absoluteIndex: tableIndex
+                    });
+                }
+                continue;
+            }
+
+            const insertionStartIndex = localIndex;
+            
+            // Insert the paragraph text
+            requestsToProcess.push({
+                type: 'insertText',
+                request: {
+                    insertText: {
+                        location: { index: localIndex },
+                        text: block.text,
                     }
                 },
-                absoluteIndex: insertionStartIndex + span.relativeStartIndex
+                absoluteIndex: localIndex
+            });
+            localIndex += block.text.length;
+            const insertionEndIndex = localIndex;
+
+            // Add inline style requests
+            for (const span of block.inlineStyles) {
+                requestsToProcess.push({
+                    type: 'updateTextStyle',
+                    request: {
+                        updateTextStyle: {
+                            range: {
+                                startIndex: insertionStartIndex + span.relativeStartIndex,
+                                endIndex: insertionStartIndex + span.relativeEndIndex,
+                            },
+                            textStyle: span.styles,
+                            fields: Object.keys(span.styles).join(','),
+                        }
+                    },
+                    absoluteIndex: insertionStartIndex + span.relativeStartIndex
+                });
+            }
+
+            processedParagraphs.push({
+                ...block,
+                startIndex: insertionStartIndex,
+                endIndex: insertionEndIndex
             });
         }
-
-        // Store processing info for the next pass
-        processedParagraphs.push({
-            ...paraInfo,
-            startIndex: insertionStartIndex,
-            endIndex: insertionEndIndex
-        });
+        return localIndex;
     }
+
+    currentTextIndex = generateRequestsForBlocks(blocksInfo, baseStartIndex);
 
     // 2. Process Block Formatting (Lists, Headings, Alignment)
     let i = 0;
@@ -427,7 +552,7 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
     let stylisticRequests = [];
 
     for (const req of requestsToProcess) {
-        if (req.type === 'insertText' || req.type === 'deleteContentRange') { 
+        if (req.type === 'insertText' || req.type === 'deleteContentRange' || req.type === 'insertTable') { 
             structuralRequests.push(req);
         } else {
             stylisticRequests.push(req);
@@ -444,7 +569,8 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
         'createParagraphBullets': 1,
         'deleteParagraphBullets': 2,
         'updateParagraphStyle': 3,
-        'updateTextStyle': 4
+        'updateTextStyle': 4,
+        'updateTableCellStyle': 5
     };
 
     stylisticRequests.sort((a, b) => {

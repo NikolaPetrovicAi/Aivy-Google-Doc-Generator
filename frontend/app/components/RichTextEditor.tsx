@@ -5,6 +5,10 @@ import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 import FontFamily from '@tiptap/extension-font-family';
 import Highlight from '@tiptap/extension-highlight';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { TableHeader } from '@tiptap/extension-table-header';
 import React, { useEffect, useState, useCallback } from 'react';
 import { Sparkles, Type, AlignLeft, Scissors, ArrowRightLeft } from 'lucide-react';
 
@@ -32,14 +36,56 @@ const RichTextEditor = ({
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      StarterKit.configure({}),
+      StarterKit.configure({
+        trailingNode: {},
+      }),
       TextAlign.configure({
-        types: ['heading', 'paragraph'],
+        types: ['heading', 'paragraph', 'tableCell', 'tableHeader'],
       }),
       TextStyle,
       FontFamily,
       Color,
       Highlight.configure({ multicolor: true }),
+      Table.configure({
+        resizable: true,
+      }).extend({
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            class: {
+              default: null,
+            },
+            style: {
+              default: null,
+            },
+          };
+        },
+      }),
+      TableRow,
+      TableHeader,
+      TableCell.extend({
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            style: {
+              default: null,
+              parseHTML: element => element.getAttribute('style'),
+              renderHTML: attributes => {
+                if (!attributes.style) return {};
+                return { style: attributes.style };
+              },
+            },
+            class: {
+              default: null,
+              parseHTML: element => element.getAttribute('class'),
+              renderHTML: attributes => {
+                if (!attributes.class) return {};
+                return { class: attributes.class };
+              },
+            },
+          };
+        },
+      }),
     ],
     content: content,
     editable,

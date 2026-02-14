@@ -58,7 +58,7 @@ export default function Home() {
       setDocuments(prevDocs => {
         const fetchedDocs = Array.isArray(data.documents) ? data.documents : [];
         const allDocs = token ? [...prevDocs, ...fetchedDocs] : fetchedDocs;
-        const uniqueDocs = Array.from(new Map(allDocs.map(doc => [doc.id, doc])).values());
+        const uniqueDocs = Array.from(new Map<string, Document>(allDocs.map((doc: Document) => [doc.id, doc])).values());
         return uniqueDocs;
       });
       setNextPageToken(data.nextPageToken);
@@ -70,7 +70,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    fetchDocuments(null);
+    fetchDocuments(undefined);
   }, [fetchDocuments]);
 
   const lastDocumentElementRef = useCallback(

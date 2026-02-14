@@ -127,6 +127,71 @@ body {
      but if user wants it inside, we can reset. Let's keep default for justify. */
 }
 
+/* Tiptap Table Styling */
+.ProseMirror table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 1rem 0;
+  overflow: hidden;
+}
+
+.ProseMirror td, .ProseMirror th {
+  min-width: 1em;
+  border: 1px solid #ced4da;
+  padding: 8px 12px;
+  vertical-align: top;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.ProseMirror td > *, .ProseMirror th > * {
+  margin-bottom: 0;
+}
+
+.ProseMirror th {
+  font-weight: bold;
+  text-align: left;
+  background-color: #f8f9fa;
+}
+
+.ProseMirror .selectedCell:after {
+  z-index: 2;
+  position: absolute;
+  content: "";
+  left: 0; right: 0; top: 0; bottom: 0;
+  background: rgba(200, 200, 255, 0.4);
+  pointer-events: none;
+}
+
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background-color: #adf;
+  pointer-events: none;
+}
+
+/* Layout tables (invisible borders) - Truly invisible in editor */
+.ProseMirror table.border-none {
+  border: 0 !important;
+  border-style: none !important;
+}
+
+.ProseMirror table.border-none td,
+.ProseMirror table.border-none th,
+.ProseMirror table.border-none tr {
+  border: 0 !important;
+  border-color: transparent !important;
+  border-style: none !important;
+}
+
+/* Ensure that even if Tiptap adds internal wrappers, they don't show borders */
+.ProseMirror table.border-none * {
+  border-color: transparent !important;
+}
 
 /* 
    NESTED LISTS: Reset counters properly 
