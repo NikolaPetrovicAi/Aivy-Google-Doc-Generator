@@ -152,6 +152,7 @@ function markdownToGoogleDocsRequests(jsonString, initialIndex = 1) {
                             let cellOffsets = [4, 6, 8];
                             for (let i = 0; i < 3; i++) {
                                 const stat = block.stats[i];
+                                // Value (Number) first, then Label
                                 const cellText = `${stat.value}\n${stat.label}`;
                                 const cellIndex = tableIndex + cellOffsets[i];
 
@@ -162,19 +163,20 @@ function markdownToGoogleDocsRequests(jsonString, initialIndex = 1) {
                                     }
                                 });
 
-                                // Style the Value (Bold, Larger)
+                                // Style the Value (Number) as HEADING_3
                                 requests.push({
-                                    updateTextStyle: {
+                                    updateParagraphStyle: {
                                         range: { startIndex: cellIndex, endIndex: cellIndex + stat.value.length },
-                                        textStyle: { bold: true, fontSize: { magnitude: 14, unit: 'PT' } },
-                                        fields: 'bold,fontSize'
+                                        paragraphStyle: { namedStyleType: 'HEADING_3', alignment: 'CENTER' },
+                                        fields: 'namedStyleType,alignment'
                                     }
                                 });
 
-                                // Center align the cell content (including the original \n that was pushed)
+                                // Style the Label (below) as centered plain text (removing previous bold/size)
+                                const labelStartIndex = cellIndex + stat.value.length + 1;
                                 requests.push({
                                     updateParagraphStyle: {
-                                        range: { startIndex: cellIndex, endIndex: cellIndex + cellText.length + 1 },
+                                        range: { startIndex: labelStartIndex, endIndex: labelStartIndex + stat.label.length + 1 },
                                         paragraphStyle: { alignment: 'CENTER' },
                                         fields: 'alignment'
                                     }

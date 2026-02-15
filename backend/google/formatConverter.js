@@ -132,7 +132,14 @@ function googleDocsToHtml(doc) {
               if (!b) {
                 if (cellList) { cellHtml += `</${cellList.tag}>`; cellList = null; }
                 const isBlank = inner.trim() === '';
-                cellHtml += `<p${alignStyle}>${isBlank ? '&nbsp;' : inner}</p>`;
+                
+                const styleType = p.paragraphStyle?.namedStyleType || 'NORMAL_TEXT';
+                if (styleType.startsWith('HEADING_')) {
+                  const level = styleType.split('_')[1];
+                  cellHtml += `<h${level}${alignStyle}>${isBlank ? '&nbsp;' : inner}</h${level}>`;
+                } else {
+                  cellHtml += `<p${alignStyle}>${isBlank ? '&nbsp;' : inner}</p>`;
+                }
               } else {
                 const lid = b.listId;
                 if (!cellList || cellList.id !== lid) {
