@@ -53,7 +53,11 @@ const RichTextEditor = ({
           return {
             ...this.parent?.(),
             class: {
-              default: null,
+              default: 'border-none', // Force border-none by default
+              parseHTML: element => element.getAttribute('class') || 'border-none',
+              renderHTML: attributes => {
+                return { class: attributes.class || 'border-none' };
+              },
             },
             style: {
               default: null,
@@ -68,11 +72,12 @@ const RichTextEditor = ({
           return {
             ...this.parent?.(),
             style: {
-              default: null,
+              default: 'border: none !important;', // Force no border inline
               parseHTML: element => element.getAttribute('style'),
               renderHTML: attributes => {
-                if (!attributes.style) return {};
-                return { style: attributes.style };
+                // Merge existing styles but ensure border is none
+                const baseStyle = attributes.style || '';
+                return { style: `${baseStyle}; border: none !important;`.trim() };
               },
             },
             class: {

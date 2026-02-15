@@ -138,7 +138,8 @@ body {
 
 .ProseMirror td, .ProseMirror th {
   min-width: 1em;
-  border: 1px solid #ced4da;
+  border: 0 !important; /* Force no border */
+  border-style: none !important;
   padding: 8px 12px;
   vertical-align: top;
   box-sizing: border-box;
@@ -152,7 +153,7 @@ body {
 .ProseMirror th {
   font-weight: bold;
   text-align: left;
-  background-color: #f8f9fa;
+  background-color: transparent; /* Changed from #f8f9fa to be truly invisible layout */
 }
 
 .ProseMirror .selectedCell:after {
@@ -160,7 +161,7 @@ body {
   position: absolute;
   content: "";
   left: 0; right: 0; top: 0; bottom: 0;
-  background: rgba(200, 200, 255, 0.4);
+  background: rgba(200, 200, 255, 0.2); /* Fainter selection */
   pointer-events: none;
 }
 
