@@ -78,27 +78,27 @@ function googleDocsToHtml(doc) {
   for (let i = 0; i < content.length; i++) {
     const item = content[i];
 
-    if (item.table) {
-      // Close any open list before starting a table
-      if (currentList) {
-        html += `</${currentList.tag}>`;
-        currentList = null;
+    // 1. Handle Section Breaks (Page Breaks)
+    if (item.sectionBreak) {
+      if (currentList) { html += `</${currentList.tag}>`; currentList = null; }
+      // Only add a page break if we have content AND it's not the very last item
+      if (html.length > 0 && i < content.length - 1) {
+        html += '<!-- PAGE_BREAK -->';
       }
+      continue;
+    }
+
+    // 2. Handle Tables
+    if (item.table) {
+      if (currentList) { html += `</${currentList.tag}>`; currentList = null; }
 
       const table = item.table;
       let tableStyle = '';
-      
-      // Check if it's a layout table (invisible borders)
       const firstCell = table.tableRows[0]?.tableCells[0];
       const borderTop = firstCell?.tableCellStyle?.borderTop;
-      
-      // Detection logic: 
-      // 1. Missing width or magnitude 0
-      // 2. OR color is White (1, 1, 1) - common for our layout tables
       const isWhite = borderTop?.color?.color?.rgbColor?.red === 1 && 
                       borderTop?.color?.color?.rgbColor?.green === 1 && 
                       borderTop?.color?.color?.rgbColor?.blue === 1;
-      
       const isInvisible = !borderTop || !borderTop.width || borderTop.width.magnitude === 0 || isWhite;
       
       if (isInvisible) {
@@ -108,31 +108,21 @@ function googleDocsToHtml(doc) {
       }
 
       html += `<table${tableStyle}><tbody>`;
-
       for (const row of table.tableRows) {
         html += '<tr>';
         for (const cell of row.tableCells) {
-          // Check cell width
-          let cellStyle = 'padding: 5px;';
-          const cellWidth = cell.tableCellStyle?.columnSpan > 1 ? null : null; // Simplified for now
-          
-          html += `<td style="${cellStyle}">`;
-          
-          // Process cell content recursively (simplified version of the main loop)
+          html += `<td style="padding: 5px;">`;
           let cellHtml = '';
           let cellList = null;
           for (const cellItem of (cell.content || [])) {
             if (cellItem.paragraph) {
               const p = cellItem.paragraph;
               const b = p.bullet;
-              const align = p.paragraphStyle?.alignment;
-              const alignStyle = getAlignmentStyle(align);
+              const alignStyle = getAlignmentStyle(p.paragraphStyle?.alignment);
               let inner = (p.elements || []).map(processTextRun).join('').replace(/\v/g, '<br>');
-
               if (!b) {
                 if (cellList) { cellHtml += `</${cellList.tag}>`; cellList = null; }
                 const isBlank = inner.trim() === '';
-                
                 const styleType = p.paragraphStyle?.namedStyleType || 'NORMAL_TEXT';
                 if (styleType.startsWith('HEADING_')) {
                   const level = styleType.split('_')[1];
@@ -155,7 +145,6 @@ function googleDocsToHtml(doc) {
             }
           }
           if (cellList) cellHtml += `</${cellList.tag}>`;
-          
           html += cellHtml || '&nbsp;';
           html += '</td>';
         }
@@ -165,90 +154,68 @@ function googleDocsToHtml(doc) {
       continue;
     }
 
+    // 3. Handle Paragraphs (and Page Breaks inside them)
     if (item.paragraph) {
       const paragraph = item.paragraph;
-      const bullet = paragraph.bullet;
-      
-      const align = paragraph.paragraphStyle?.alignment;
-      const alignStyle = getAlignmentStyle(align);
 
-      let innerHtml = (paragraph.elements || []).map(processTextRun).join('');
-      innerHtml = innerHtml.replace(/\v/g, '<br>');
-
-      // Logic to close a list if the current paragraph is not a list item
-      if (!bullet) {
-        if (currentList) {
-          html += `</${currentList.tag}>`;
-          currentList = null;
+      // Check for Page Break inside paragraph
+      if ((paragraph.elements || []).some(el => el.pageBreak)) {
+        if (currentList) { html += `</${currentList.tag}>`; currentList = null; }
+        // Only add if we have content and it's not the end
+        if (html.length > 0 && i < content.length - 1) {
+          html += '<!-- PAGE_BREAK -->';
         }
+        continue;
+      }
 
-        // Handle headings and normal paragraphs
+      const bullet = paragraph.bullet;
+      const alignStyle = getAlignmentStyle(paragraph.paragraphStyle?.alignment);
+      let innerHtml = (paragraph.elements || []).map(processTextRun).join('').replace(/\v/g, '<br>');
+
+      if (!bullet) {
+        if (currentList) { html += `</${currentList.tag}>`; currentList = null; }
         const styleType = paragraph.paragraphStyle?.namedStyleType || 'NORMAL_TEXT';
         if (styleType.startsWith('HEADING_')) {
           const level = styleType.split('_')[1];
           html += `<h${level}${alignStyle}>${innerHtml}</h${level}>`;
         } else {
             const isBlankLine = innerHtml.trim() === '';
-            if (i === content.length - 1 && isBlankLine) continue; // Skip final blank line
+            if (i === content.length - 1 && isBlankLine) continue;
             html += `<p${alignStyle}>${isBlankLine ? '&nbsp;' : innerHtml}</p>`;
         }
-      } else { // This paragraph is a list item
+      } else {
         const listId = bullet.listId;
-        if (!lists[listId]) continue; // Skip if list definition is missing
-
-        // --- LIST START/CONTINUATION LOGIC ---
+        if (!lists[listId]) continue;
         if (!currentList || currentList.id !== listId) {
-          if (currentList) {
-            html += `</${currentList.tag}>`;
-          }
-          const listProperties = lists[listId].listProperties;
-          const nestingLevel = listProperties.nestingLevels[bullet.nestingLevel || 0];
-          const glyphType = nestingLevel.glyphType || '';
-          const listTag = ['DECIMAL', 'ALPHA', 'ROMAN'].includes(glyphType) ? 'ol' : 'ul';
-          
-          html += `<${listTag}>`;
-          currentList = { id: listId, tag: listTag };
+          if (currentList) { html += `</${currentList.tag}>`; }
+          const lp = lists[listId].listProperties;
+          const nl = lp.nestingLevels[bullet.nestingLevel || 0];
+          const tag = ['DECIMAL', 'ALPHA', 'ROMAN'].includes(nl.glyphType || '') ? 'ol' : 'ul';
+          html += `<${tag}>`;
+          currentList = { id: listId, tag: tag };
         }
 
-        // --- LOOKAHEAD LOGIC TO BUILD FULL LIST ITEM CONTENT ---
-        let fullListItemContent = `<p${alignStyle}>${innerHtml}</p>`; // Start with the bulleted paragraph
-
+        let fullListItemContent = `<p${alignStyle}>${innerHtml}</p>`;
         let lookaheadIndex = i + 1;
-        // Check for subsequent paragraphs that belong to this list item
         while (
           lookaheadIndex < content.length &&
           content[lookaheadIndex].paragraph &&
-          !content[lookaheadIndex].paragraph.bullet && // Must not be another bullet point
-          (content[lookaheadIndex].paragraph.paragraphStyle?.indentStart?.magnitude > 0) // Must be indented
+          !content[lookaheadIndex].paragraph.bullet &&
+          (content[lookaheadIndex].paragraph.paragraphStyle?.indentStart?.magnitude > 0)
         ) {
           const contentParagraph = content[lookaheadIndex].paragraph;
-          const contentAlign = contentParagraph.paragraphStyle?.alignment;
-          const contentAlignStyle = getAlignmentStyle(contentAlign);
-
+          const contentAlignStyle = getAlignmentStyle(contentParagraph.paragraphStyle?.alignment);
           const contentHtml = (contentParagraph.elements || []).map(processTextRun).join('').replace(/\v/g, '<br>');
-          
-          if (contentHtml.trim() !== '') {
-            fullListItemContent += `<p${contentAlignStyle}>${contentHtml}</p>`;
-          } else {
-            fullListItemContent += `<p${contentAlignStyle}>&nbsp;</p>`; // Handle blank lines
-          }
-          
-          lookaheadIndex++; // Consume this paragraph
+          fullListItemContent += `<p${contentAlignStyle}>${contentHtml || '&nbsp;'}</p>`;
+          lookaheadIndex++;
         }
-        
         html += `<li>${fullListItemContent}</li>`;
-
-        // Jump the main loop forward past the paragraphs we just consumed
         i = lookaheadIndex - 1;
       }
     }
   }
 
-  // Close any list that's still open at the end of the document
-  if (currentList) {
-    html += `</${currentList.tag}>`;
-  }
-
+  if (currentList) { html += `</${currentList.tag}>`; }
   return html.trim();
 }
 

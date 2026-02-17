@@ -57,6 +57,50 @@ function getBulletPreset(level, listType) {
     }
 }
 
+/**
+ * Ensures that <!-- PAGE_BREAK --> markers are not located inside <table> tags.
+ * If found inside a table, they are moved immediately after the table.
+ */
+function movePageBreaksOutOfTables(html) {
+    const dom = new JSDOM(`<body>${html}</body>`);
+    const doc = dom.window.document;
+    const body = doc.body;
+    
+    // NodeFilter.SHOW_COMMENT = 128
+    const walker = doc.createTreeWalker(body, 128, null, false);
+
+    const markersToMove = [];
+    let currentNode = walker.nextNode();
+    while (currentNode) {
+        if (currentNode.textContent.trim() === 'PAGE_BREAK') {
+            let parent = currentNode.parentElement;
+            let table = null;
+            while (parent) {
+                if (parent.tagName.toLowerCase() === 'table') {
+                    table = parent;
+                    break;
+                }
+                parent = parent.parentElement;
+            }
+            if (table) {
+                markersToMove.push({ comment: currentNode, table: table });
+            }
+        }
+        currentNode = walker.nextNode();
+    }
+
+    markersToMove.forEach(({ comment, table }) => {
+        // Move the marker after the table
+        if (table.nextSibling) {
+            table.parentNode.insertBefore(comment, table.nextSibling);
+        } else {
+            table.parentNode.appendChild(comment);
+        }
+    });
+
+    return body.innerHTML;
+}
+
 // Helper to recursively get all block-level nodes in document order
 function getBlockLevelNodes(rootNode, window, currentListLevel = 0, currentListType = null) {
     let nodes = [];
@@ -64,13 +108,19 @@ function getBlockLevelNodes(rootNode, window, currentListLevel = 0, currentListT
     for (const childElement of rootNode.children) {
         const tagName = childElement.tagName.toLowerCase();
         if (['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
-            nodes.push({ node: childElement, isListItem: false, listLevel: 0, listType: null, isChildParagraph: false });
+            nodes.push({ 
+                node: childElement, 
+                isListItem: false, 
+                listLevel: 0, 
+                listType: null, 
+                isChildParagraph: false 
+            });
         } else if (tagName === 'table') {
             const rows = [];
-            const trs = childElement.querySelectorAll('tr');
+            const trs = childElement.querySelectorAll(':scope > tr, :scope > tbody > tr');
             for (const tr of trs) {
                 const cells = [];
-                const tds = tr.querySelectorAll('td, th');
+                const tds = tr.querySelectorAll(':scope > td, :scope > th');
                 for (const td of tds) {
                     cells.push({
                         node: td,
@@ -89,45 +139,93 @@ function getBlockLevelNodes(rootNode, window, currentListLevel = 0, currentListT
         } else if (tagName === 'li') {
             const liLevel = currentListLevel;
             const liType = currentListType;
-
-            const virtualLiNode = window.document.createElement('li');
-            // Propagate text-align style from the original li to the virtual li
-            if (childElement.style.textAlign) {
-                virtualLiNode.style.textAlign = childElement.style.textAlign;
-            }
             
-            let childParagraphs = [];
+            let parts = [];
+            let currentInline = [];
 
-            for (const liChild of childElement.childNodes) {
-                if (liChild.nodeType === window.Node.ELEMENT_NODE && liChild.tagName.toLowerCase() === 'p') {
-                    childParagraphs.push(liChild);
+            // Categorize LI children into block-level elements and inline elements
+            for (const child of childElement.childNodes) {
+                if (child.nodeType === window.Node.ELEMENT_NODE && 
+                    ['p', 'ul', 'ol', 'table', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(child.tagName.toLowerCase())) {
+                    if (currentInline.length > 0) {
+                        parts.push({ type: 'inline', nodes: [...currentInline] });
+                        currentInline = [];
+                    }
+                    parts.push({ type: 'block', node: child });
                 } else {
-                    virtualLiNode.appendChild(liChild.cloneNode(true));
+                    currentInline.push(child);
                 }
             }
+            if (currentInline.length > 0) {
+                parts.push({ type: 'inline', nodes: [...currentInline] });
+            }
 
-            // Logic to determine which node is the "Main" list item (receives bullet/number)
-            // vs which are "Child" paragraphs (indent only, no bullet)
-            
-            if (virtualLiNode.textContent.trim() !== '') {
-                // Case 1: LI has direct text. e.g. <li>Main Text<p>Child</p></li>
-                nodes.push({ node: virtualLiNode, isListItem: true, listLevel: liLevel, listType: liType, isChildParagraph: false });
-                
-                // All paragraphs are children
-                for (const pNode of childParagraphs) {
-                    nodes.push({ node: pNode, isListItem: true, listLevel: liLevel, listType: liType, isChildParagraph: true });
-                }
-            } else {
-                // Case 2: LI has no direct text, starts with P. e.g. <li><p>Main Text</p><p>Child</p></li>
-                if (childParagraphs.length > 0) {
-                    // The FIRST paragraph is the main item
-                    nodes.push({ node: childParagraphs[0], isListItem: true, listLevel: liLevel, listType: liType, isChildParagraph: false });
+            let mainItemProcessed = false;
+            let blocksAddedCount = 0;
+
+            for (const part of parts) {
+                if (part.type === 'inline') {
+                    const virtualLi = window.document.createElement('li');
+                    if (childElement.style.textAlign) {
+                        virtualLi.style.textAlign = childElement.style.textAlign;
+                    }
+                    part.nodes.forEach(n => virtualLi.appendChild(n.cloneNode(true)));
                     
-                    // Subsequent paragraphs are children
-                    for (let k = 1; k < childParagraphs.length; k++) {
-                        nodes.push({ node: childParagraphs[k], isListItem: true, listLevel: liLevel, listType: liType, isChildParagraph: true });
+                    if (virtualLi.textContent.trim() !== '' || (parts.length === 1 && part.nodes.length > 0)) {
+                        nodes.push({
+                            node: virtualLi,
+                            isListItem: true,
+                            listLevel: liLevel,
+                            listType: liType,
+                            isChildParagraph: mainItemProcessed
+                        });
+                        mainItemProcessed = true;
+                        blocksAddedCount++;
+                    }
+                } else {
+                    const tag = part.node.tagName.toLowerCase();
+                    if (['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tag)) {
+                        nodes.push({
+                            node: part.node,
+                            isListItem: true,
+                            listLevel: liLevel,
+                            listType: liType,
+                            isChildParagraph: mainItemProcessed
+                        });
+                        mainItemProcessed = true;
+                        blocksAddedCount++;
+                    } else if (tag === 'ul' || tag === 'ol') {
+                        const subNodes = getBlockLevelNodes(part.node, window, liLevel + 1, tag);
+                        nodes.push(...subNodes);
+                        blocksAddedCount += subNodes.length;
+                    } else if (tag === 'table') {
+                        // Handle tables inside LI
+                        const rows = [];
+                        const trs = part.node.querySelectorAll(':scope > tr, :scope > tbody > tr');
+                        for (const tr of trs) {
+                            const cells = [];
+                            const tds = tr.querySelectorAll(':scope > td, :scope > th');
+                            for (const td of tds) {
+                                cells.push({ node: td, contentNodes: getBlockLevelNodes(td, window, 0, null) });
+                            }
+                            rows.push(cells);
+                        }
+                        nodes.push({ type: 'table', node: part.node, rows: rows });
+                        blocksAddedCount++;
                     }
                 }
+            }
+            
+            // If the LI is truly empty, add a placeholder block to maintain the bullet
+            if (blocksAddedCount === 0) {
+                const emptyLi = window.document.createElement('li');
+                nodes.push({
+                    node: emptyLi,
+                    isListItem: true,
+                    listLevel: liLevel,
+                    listType: liType,
+                    isChildParagraph: false
+                });
             }
         }
     }
@@ -135,6 +233,43 @@ function getBlockLevelNodes(rootNode, window, currentListLevel = 0, currentListT
 }
 
 function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
+    const pageBreakMarker = '<!-- PAGE_BREAK -->';
+
+    // 0. Pre-process HTML to move any page breaks out of tables to avoid API errors
+    if (htmlContent.includes(pageBreakMarker)) {
+        htmlContent = movePageBreaksOutOfTables(htmlContent);
+    }
+
+    if (htmlContent.includes(pageBreakMarker)) {
+        const parts = htmlContent.split(pageBreakMarker);
+        let allRequests = [];
+        let currentIndex = baseStartIndex;
+
+        for (let i = 0; i < parts.length; i++) {
+            // Recursively call for each part (parts won't have the marker)
+            const { requests, endIndex } = htmlToGoogleDocsRequests(parts[i], currentIndex);
+            allRequests.push(...requests);
+            currentIndex = endIndex;
+
+            if (i < parts.length - 1) {
+                // Insert Page Break logic matching docs.js
+                allRequests.push({
+                    insertPageBreak: {
+                        location: { index: currentIndex }
+                    }
+                });
+                allRequests.push({
+                    insertText: {
+                        text: '\n',
+                        location: { index: currentIndex + 1 }
+                    }
+                });
+                currentIndex += 2;
+            }
+        }
+        return { requests: allRequests, endIndex: currentIndex };
+    }
+
     const dom = new JSDOM(`<body>${htmlContent}</body>`);
     const body = dom.window.document.body;
     let accumulatedRequests = []; // To store all requests before sorting
@@ -286,7 +421,7 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
 
     let currentAbsoluteIndex = baseStartIndex;
     let requestsToProcess = [];
-    let processedParagraphs = []; // Store info with calculated absolute indices
+    let allBlocksSequentially = []; // Track EVERY block (paragraph OR table) in order
 
     function generateRequestsForBlocks(blocks, startIndex) {
         let localIndex = startIndex;
@@ -294,6 +429,15 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
         for (const block of blocks) {
             if (block.type === 'table') {
                 const tableStartIndex = localIndex;
+
+                // FIX: Pre-insert table block to maintain document order in allBlocksSequentially
+                const tableSeqBlock = {
+                    type: 'table',
+                    startIndex: tableStartIndex,
+                    endIndex: 0 // Will be updated below
+                };
+                allBlocksSequentially.push(tableSeqBlock);
+
                 const rows = block.rows.length;
                 const cols = block.rows[0]?.length || 0;
 
@@ -311,12 +455,10 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
                 });
 
                 const tableIndex = tableStartIndex + 1;
-                
+                let totalCellTextLength = 0;
+
                 if (rows === 1 && cols === 3) {
-                    // Offsets from tableIndex (which is tableStartIndex + 1, the TS element)
-                    // CS0 is at tableIndex + 2, content (\n) is at tableIndex + 3
                     let currentCellOffset = 3;
-                    let totalCellTextLength = 0;
                     for (let r = 0; r < rows; r++) {
                         for (let c = 0; c < cols; c++) {
                             const cell = block.rows[r][c];
@@ -333,6 +475,8 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
                 } else {
                     localIndex += (rows * cols * 2) + 5; 
                 }
+
+                tableSeqBlock.endIndex = localIndex;
 
                 const styleAttr = block.node.getAttribute('style') || '';
                 const classList = block.node.classList;
@@ -399,8 +543,9 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
                 });
             }
 
-            processedParagraphs.push({
+            allBlocksSequentially.push({
                 ...block,
+                type: 'paragraph',
                 startIndex: insertionStartIndex,
                 endIndex: insertionEndIndex
             });
@@ -412,21 +557,39 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
 
     // 2. Process Block Formatting (Lists, Headings, Alignment)
     let i = 0;
-    while (i < processedParagraphs.length) {
-        const para = processedParagraphs[i];
+    while (i < allBlocksSequentially.length) {
+        const block = allBlocksSequentially[i];
 
-        if (para.isListItem) {
+        // Ensure we ALWAYS clean up any inherited bullets for every paragraph block
+        if (block.type === 'paragraph') {
+            requestsToProcess.push({
+                type: 'deleteParagraphBullets',
+                request: {
+                    deleteParagraphBullets: {
+                        range: { startIndex: block.startIndex, endIndex: block.endIndex },
+                    }
+                },
+                absoluteIndex: block.startIndex
+            });
+        }
+
+        if (block.type === 'paragraph' && block.isListItem === true && block.listType) {
             // Found the start of a list. Find the end of this continuous list block.
-            // We group by listType to ensure we apply the correct preset (OL vs UL).
+            // We group by listType and listLevel to ensure we apply the correct preset and maintain boundaries.
             let j = i;
-            while (j < processedParagraphs.length && 
-                   processedParagraphs[j].isListItem && 
-                   processedParagraphs[j].listType === para.listType) {
-                j++;
+            while (j < allBlocksSequentially.length) {
+                const nextBlock = allBlocksSequentially[j];
+                if (nextBlock.type === 'paragraph' && 
+                    nextBlock.isListItem === true && 
+                    nextBlock.listType === block.listType) {
+                    j++;
+                } else {
+                    break;
+                }
             }
             // List block is from index i to j-1
-            const groupStart = processedParagraphs[i].startIndex;
-            const groupEnd = processedParagraphs[j - 1].endIndex;
+            const groupStart = allBlocksSequentially[i].startIndex;
+            const groupEnd = allBlocksSequentially[j - 1].endIndex;
 
             // A. Apply ONE bullet preset for the entire group to ensure continuity
             requestsToProcess.push({
@@ -434,7 +597,7 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
                 request: {
                     createParagraphBullets: {
                         range: { startIndex: groupStart, endIndex: groupEnd },
-                        bulletPreset: getBulletPreset(para.listLevel, para.listType),
+                        bulletPreset: getBulletPreset(block.listLevel, block.listType),
                     }
                 },
                 absoluteIndex: groupStart
@@ -442,36 +605,19 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
 
             // B. Handle individual items within the group (Indentation & Child Cleanup)
             for (let k = i; k < j; k++) {
-                const item = processedParagraphs[k];
+                const item = allBlocksSequentially[k];
                 
-                // 1. Remove bullet from child paragraphs FIRST.
-                // Critical: 'deleteParagraphBullets' resets indentation, so it must happen BEFORE we apply our custom indent.
-                if (item.isChildParagraph) {
-                    requestsToProcess.push({
-                        type: 'deleteParagraphBullets',
-                        request: {
-                            deleteParagraphBullets: {
-                                range: { startIndex: item.startIndex, endIndex: item.endIndex },
-                            }
-                        },
-                        absoluteIndex: item.startIndex
-                    });
-                }
-
+                // Note: deleteParagraphBullets for children is now handled by the global clean-up above
+                
                 const itemStyle = {};
                 const itemFields = [];
 
-                // Indentation
-                // Only apply explicit indent for nested levels or child paragraphs.
-                // For level 1 main items, let the bulletPreset handle the default indent.
                 if ((item.listLevel > 1 && !item.isChildParagraph) || item.isChildParagraph) {
-                    // Child paragraphs get extra indent to align with parent text
                     const indentLevel = item.isChildParagraph ? item.listLevel + 1 : item.listLevel;
                     itemStyle.indentStart = { magnitude: 18 * indentLevel, unit: 'PT' };
                     itemFields.push('indentStart');
                 }
 
-                // Handle Alignment for List Items
                 if (item.alignment) {
                     const alignmentMap = { left: 'START', center: 'CENTER', right: 'END', justify: 'JUSTIFIED' };
                     const apiAlignment = alignmentMap[item.alignment.toLowerCase()];
@@ -481,8 +627,6 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
                     }
                 }
 
-                // 2. Apply Indentation and other styles LAST.
-                // This ensures our indentation persists even after bullet deletion.
                 if (itemFields.length > 0) {
                     requestsToProcess.push({
                         type: 'updateParagraphStyle',
@@ -497,24 +641,22 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
                     });
                 }
             }
-
-            // Move main loop index to end of this group
             i = j;
 
-        } else {
+        } else if (block.type === 'paragraph') {
             // Handle Non-List Paragraphs (Headings, Alignment)
             const paragraphStyle = {};
             const styleFields = [];
 
-            if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(para.tagName)) {
-                const level = para.tagName.substring(1);
+            if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(block.tagName)) {
+                const level = block.tagName.substring(1);
                 paragraphStyle.namedStyleType = `HEADING_${level}`;
                 styleFields.push('namedStyleType');
             }
 
-            if (para.alignment) {
+            if (block.alignment) {
                 const alignmentMap = { left: 'START', center: 'CENTER', right: 'END', justify: 'JUSTIFIED' };
-                const apiAlignment = alignmentMap[para.alignment.toLowerCase()];
+                const apiAlignment = alignmentMap[block.alignment.toLowerCase()];
                 if (apiAlignment) {
                     paragraphStyle.alignment = apiAlignment;
                     styleFields.push('alignment');
@@ -526,24 +668,28 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
                     type: 'updateParagraphStyle',
                     request: {
                         updateParagraphStyle: {
-                            range: { startIndex: para.startIndex, endIndex: para.endIndex },
+                            range: { startIndex: block.startIndex, endIndex: block.endIndex },
                             paragraphStyle: paragraphStyle,
                             fields: styleFields.join(','),
                         }
                     },
-                    absoluteIndex: para.startIndex
+                    absoluteIndex: block.startIndex
                 });
             }
-            
-            i++; // Process next paragraph
+            i++;
+        } else {
+            // It's a table or something else that doesn't need paragraph formatting here
+            i++;
         }
     }
 
     // DEBUG: Check if listType is propagating correctly
-    console.log("--- DEBUG PROCESSED PARAGRAPHS ---");
-    processedParagraphs.forEach((p, idx) => {
-        if (p.isListItem) {
-            console.log(`Idx: ${idx}, Text: "${p.text.substring(0, 20)}...", IsList: ${p.isListItem}, Type: ${p.listType}, Child: ${p.isChildParagraph}`);
+    console.log("--- DEBUG ALL BLOCKS SEQUENTIALLY ---");
+    allBlocksSequentially.forEach((b, idx) => {
+        if (b.type === 'paragraph' && b.isListItem) {
+            console.log(`Idx: ${idx}, Text: "${b.text.substring(0, 20)}...", IsList: ${b.isListItem}, Type: ${b.listType}, Child: ${b.isChildParagraph}`);
+        } else {
+            console.log(`Idx: ${idx}, Type: ${b.type}, Start: ${b.startIndex}, End: ${b.endIndex}`);
         }
     });
 
@@ -564,10 +710,10 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
 
     // Sort stylistic requests.
     // CRITICAL: Ensure correct order when indices match.
-    // Order: createParagraphBullets -> deleteParagraphBullets -> updateParagraphStyle
+    // Order: deleteParagraphBullets -> createParagraphBullets -> updateParagraphStyle
     const typePriority = {
-        'createParagraphBullets': 1,
-        'deleteParagraphBullets': 2,
+        'deleteParagraphBullets': 1,
+        'createParagraphBullets': 2,
         'updateParagraphStyle': 3,
         'updateTextStyle': 4,
         'updateTableCellStyle': 5

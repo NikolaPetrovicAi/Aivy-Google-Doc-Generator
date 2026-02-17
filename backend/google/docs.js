@@ -215,30 +215,21 @@ async function createGoogleDocFromPlan(authClient, plan, formData) {
         console.log(`Adding Page Break after page ${page.page}`);
         
         allRequests.push({
-          deleteParagraphBullets: {
-            range: { startIndex: currentIndex - 1, endIndex: currentIndex }
-          }
-        });
-
-        allRequests.push({
           insertPageBreak: {
-            location: { index: currentIndex - 1 }
+            location: { index: currentIndex }
           }
         });
         
-        // EXPERIMENT: Attempt to explicitly create a new, empty paragraph after the page break.
-        // The page break and its own newline happen before/at `currentIndex`.
-        // We will insert another newline at `currentIndex` to see if it creates a valid paragraph for the next block.
+        // Dodajemo novi red nakon preloma stranice kako bi sledeći sadržaj počeo u novom paragrafu
         allRequests.push({
             insertText: {
                 text: '\n',
-                location: { index: currentIndex } 
+                location: { index: currentIndex + 1 } 
             }
         });
 
-        // After insertPageBreak (adds 2 chars) and our explicit '\n' (adds 1 char), total 3 new chars.
-        // Increment currentIndex by 3 to correctly position it for the next page's content.
-        currentIndex += 3;
+        // insertPageBreak (1 char) + '\n' (1 char) = 2 nova karaktera
+        currentIndex += 2;
       }
   }
 

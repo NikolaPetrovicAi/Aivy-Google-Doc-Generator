@@ -16,6 +16,7 @@ interface RichTextEditorProps {
   content: string;
   index: number;
   onPageUpdate: (index: number, html: string) => void;
+  onHeightChange?: (index: number, height: number) => void;
   onFocus: (editor: Editor) => void;
   onEditorReady: (editor: Editor | null) => void;
   editable?: boolean;
@@ -25,6 +26,7 @@ const RichTextEditor = ({
   content,
   index,
   onPageUpdate,
+  onHeightChange,
   onFocus,
   onEditorReady,
   editable = true,
@@ -97,6 +99,12 @@ const RichTextEditor = ({
       // Skip frequent parent updates during AI streaming to prevent performance bottlenecks
       if (!isAiProcessing) {
         onPageUpdate(index, editor.getHTML());
+      }
+      
+      // Report height change
+      if (onHeightChange) {
+        const height = editor.view.dom.scrollHeight;
+        onHeightChange(index, height);
       }
     },
     onFocus: ({ editor }) => {
@@ -194,20 +202,28 @@ const RichTextEditor = ({
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
       editor.commands.setContent(content, { emitUpdate: false });
+      // Report height after content is updated
+      if (onHeightChange) {
+        onHeightChange(index, editor.view.dom.scrollHeight);
+      }
     }
-  }, [content, editor]);
+  }, [content, editor, onHeightChange, index]);
 
   useEffect(() => {
     if (editor) {
       onEditorReady(editor);
+      // Report initial height
+      if (onHeightChange) {
+        onHeightChange(index, editor.view.dom.scrollHeight);
+      }
     }
     return () => {
       onEditorReady(null);
     }
-  }, [editor, onEditorReady]);
+  }, [editor, onEditorReady, onHeightChange, index]);
 
   return (
-    <div className="max-w-none flex-grow overflow-y-auto p-4 relative min-h-[50px]">
+    <div className="max-w-none flex-grow relative overflow-visible">
       {/* Custom AI Bubble Menu */}
       {menuPos && editable && !isAiProcessing && (
         <div 
