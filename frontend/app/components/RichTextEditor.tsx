@@ -9,7 +9,7 @@ import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Sparkles, Type, AlignLeft, Scissors, ArrowRightLeft } from 'lucide-react';
 
 interface RichTextEditorProps {
@@ -34,6 +34,7 @@ const RichTextEditor = ({
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [customInstruction, setCustomInstruction] = useState('');
+  const lastReportedHeight = useRef<number>(0);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -202,9 +203,11 @@ const RichTextEditor = ({
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
       editor.commands.setContent(content, { emitUpdate: false });
-      // Report height after content is updated
-      if (onHeightChange) {
-        onHeightChange(index, editor.view.dom.scrollHeight);
+      
+      const height = editor.view.dom.scrollHeight;
+      if (onHeightChange && height !== lastReportedHeight.current) {
+        lastReportedHeight.current = height;
+        onHeightChange(index, height);
       }
     }
   }, [content, editor, onHeightChange, index]);
@@ -212,9 +215,11 @@ const RichTextEditor = ({
   useEffect(() => {
     if (editor) {
       onEditorReady(editor);
-      // Report initial height
-      if (onHeightChange) {
-        onHeightChange(index, editor.view.dom.scrollHeight);
+      
+      const height = editor.view.dom.scrollHeight;
+      if (onHeightChange && height !== lastReportedHeight.current) {
+        lastReportedHeight.current = height;
+        onHeightChange(index, height);
       }
     }
     return () => {

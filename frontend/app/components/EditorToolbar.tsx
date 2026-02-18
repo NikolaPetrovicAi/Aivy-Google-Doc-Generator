@@ -36,9 +36,6 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({ editor, onSave, isSaving 
   const updateEditorState = useCallback(() => {
     if (!editor) return;
     
-    // Force re-render to update button states (isActive checks)
-    setTick(t => t + 1);
-
     const { from, to, empty } = editor.state.selection;
 
     let textColor: string | undefined = undefined;
