@@ -48,10 +48,10 @@ async function generatePage({ page, title, summary, elements, targetAudience, de
               swot_data: {
                 type: "object",
                 properties: {
-                  strengths: { type: "array", items: { type: "string" }, maxItems: 6 },
-                  weaknesses: { type: "array", items: { type: "string" }, maxItems: 6 },
-                  opportunities: { type: "array", items: { type: "string" }, maxItems: 6 },
-                  threats: { type: "array", items: { type: "string" }, maxItems: 6 }
+                  strengths: { type: "array", items: { type: "string" }, maxItems: 4 },
+                  weaknesses: { type: "array", items: { type: "string" }, maxItems: 4 },
+                  opportunities: { type: "array", items: { type: "string" }, maxItems: 4 },
+                  threats: { type: "array", items: { type: "string" }, maxItems: 4 }
                 },
                 required: ["strengths", "weaknesses", "opportunities", "threats"],
                 additionalProperties: false
@@ -92,42 +92,50 @@ async function generatePage({ page, title, summary, elements, targetAudience, de
   };
 
   const systemPrompt = `
-You are a professional document writer. Your task is to generate content for a specific document page based on the requested block types.
+### ROLE
+You are a Senior Document Architect and Professional Content Strategist. Your mission is to generate high-fidelity, structured content for a specific document page, adhering to strict semantic and formatting constraints.
 
-CILJNA PUBLIKA: "${targetAudience || 'Opšta publika'}" - Prilagodi rečnik, ton i dubinu analize ovoj grupi.
+### CONTEXTUAL PARAMETERS
+- **Target Audience:** "${targetAudience || 'General Public'}" (Tailor vocabulary, complexity, and tone accordingly).
+- **Language:** Respond exclusively in "${language}".
+- **Detail Level:** ${detailLevel}
+    - *Minimal:* High-level abstractions, extreme brevity.
+    - *Concise:* Precise, impactful summaries with moderate detail.
+    - *Detailed:* Comprehensive analysis with supporting context.
+    - *Extensive:* Exhaustive exploration, deep technical/narrative depth.
 
-IMPORTANT RULES FOR FORMATTING:
-1. NEVER include manual numbers (e.g., "1.", "2. ", "1) ") in 'list_items'.
-2. NEVER include manual bullets (e.g., "-", "*", "•") in 'list_items'.
-3. NEVER include prefixes like "Question:" or "Answer:" in the 'faqs' objects.
-4. Each string in 'list_items' should be the raw text ONLY. Formatting is handled automatically by the system.
-5. CONCISENESS RULE: Keep lists (bullet points, steps, SWOT, pros/cons) to a maximum of 6 items. If there's more information, prioritize the most important points. High-quality documents are focused and easy to scan.
+### STRUCTURAL GUIDELINES (BLOCK DEFINITIONS)
+Populate the 'blocks' array based on these specifications:
+- **TEXT_BLOCK:** Narrative flow. Content belongs in 'content'.
+- **BULLET_POINTS_BLOCK:** Logical lists. Intro in 'content', items in 'list_items'.
+- **STEP_BY_STEP_BLOCK:** Sequential procedures. Intro in 'content', steps in 'list_items'.
+- **FAQ_BLOCK:** Anticipated questions. Map to 'faqs' (question/answer).
+- **SWOT_LIST_BLOCK:** Strategic analysis. Map to 'swot_data'.
+- **PROS_CONS_BLOCK:** Comparative analysis. Map to 'pros' and 'cons'.
+- **KEY_TAKEAWAYS_BLOCK:** Critical insights. Map to 'list_items'.
+- **STATS_ROW_BLOCK:** Quantitative metrics. Exactly 3 objects in 'stats'.
 
-IMPORTANT: You must adjust the length, depth, and detail of your writing based on the following Detail Level: ${detailLevel}.
-- If 'Minimal': Write very brief, high-level summaries and short lists.
-- If 'Concise': Write clear, to-the-point content with moderate detail.
-- If 'Detailed': Write in-depth explanations, multiple paragraphs per block, and comprehensive lists.
-- If 'Extensive': Write highly detailed, exhaustive content with long paragraphs and very thorough lists.
+### HARD CONSTRAINTS & FORMATTING RULES
+1. **NO MANUAL MARKERS:** Never include numbers (1., 2.), bullets (-, *, •), or prefixes (Question:, Answer:) in list or FAQ fields.
+2. **COGNITIVE LOAD MANAGEMENT:**
+   - Standard lists: Max 6 items.
+   - SWOT components: Max 4 items.
+   - Stats: Exactly 3 items.
+3. **SEMANTIC INTEGRITY:** Ensure 'title' fields provide meaningful context for the block, not just the block type name.
+4. **STYLE MANUAL:** Maintain a professional, authoritative, yet accessible tone. Prioritize clarity and scannability.
 
-For each block in the 'blocks' array:
-- 'TEXT_BLOCK': Main content goes into 'content'.
-- 'BULLET_POINTS_BLOCK': Intro text in 'content', items in 'list_items'.
-- 'STEP_BY_STEP_BLOCK': Intro text in 'content', numbered steps in 'list_items'.
-- 'FAQ_BLOCK': Questions and answers in 'faqs'.
-- 'SWOT_LIST_BLOCK': Strengths, Weaknesses, Opportunities, and Threats in 'swot_data'.
-- 'PROS_CONS_BLOCK': Advantages in 'pros' and disadvantages in 'cons'.
-- 'KEY_TAKEAWAYS_BLOCK': Essential messages in 'list_items'.
-- 'STATS_ROW_BLOCK': 3 key metrics in 'stats'.
-
-Always respond in ${language}. Tone: Professional and tailored to the target audience.
+### OUTPUT PROTOCOL
+Generate valid JSON matching the provided schema. Do not include markdown formatting outside the JSON structure.
 `;
 
   const userPrompt = `
-Write content for: ${title}
-Page Context: ${summary}
-Requested Structure (Blocks): ${elements?.map(e => e.type).join(", ") || "TEXT_BLOCK"}
+### INPUT DATA
+- **Document Title:** ${title}
+- **Page Context/Summary:** ${summary}
+- **Requested Schema (Block Order):** ${elements?.map(e => e.type).join(", ") || "TEXT_BLOCK"}
 
-Generate the JSON with the 'blocks' array matching the requested structure.
+### TASK
+Compose the page content following the Contextual Parameters and Structural Guidelines defined in the System Instructions. Ensure logical flow between blocks while maintaining the requested sequence.
 `;
 
   try {

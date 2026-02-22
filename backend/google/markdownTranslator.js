@@ -109,10 +109,59 @@ function markdownToGoogleDocsRequests(jsonString, initialIndex = 1) {
 
                     case 'PROS_CONS_BLOCK':
                         if (block.pros_cons) {
-                            currentIndex += addHeading(requests, 'Advantages', currentIndex, 'HEADING_4');
-                            currentIndex += addList(requests, block.pros_cons.pros, currentIndex);
-                            currentIndex += addHeading(requests, 'Disadvantages', currentIndex, 'HEADING_4');
-                            currentIndex += addList(requests, block.pros_cons.cons, currentIndex);
+                            const tableIndex = currentIndex;
+                            // 1. Insert Table 1x2
+                            requests.push({
+                                insertTable: {
+                                    rows: 1,
+                                    columns: 2,
+                                    location: { index: tableIndex }
+                                }
+                            });
+
+                            let cellOffsets = [4, 6];
+                            let cellTextLengths = [0, 0];
+
+                            // Cell 0: Advantages
+                            let cell0Index = tableIndex + cellOffsets[0];
+                            let len0 = addHeading(requests, 'Advantages', cell0Index, 'HEADING_4');
+                            len0 += addList(requests, block.pros_cons.pros, cell0Index + len0);
+                            cellTextLengths[0] = len0;
+
+                            // Cell 1: Disadvantages
+                            let cell1Index = tableIndex + cellOffsets[1] + cellTextLengths[0];
+                            let len1 = addHeading(requests, 'Disadvantages', cell1Index, 'HEADING_4');
+                            len1 += addList(requests, block.pros_cons.cons, cell1Index + len1);
+                            cellTextLengths[1] = len1;
+
+                            // 2. Set column widths (225 PT)
+                            requests.push({
+                                updateTableColumnProperties: {
+                                    tableStartLocation: { index: tableIndex + 1 },
+                                    columnIndices: [0, 1],
+                                    tableColumnProperties: {
+                                        width: { magnitude: 225, unit: 'PT' },
+                                        widthType: 'FIXED_WIDTH'
+                                    },
+                                    fields: 'width,widthType'
+                                }
+                            });
+
+                            // 3. Make all table borders invisible
+                            requests.push({
+                                updateTableCellStyle: {
+                                    tableStartLocation: { index: tableIndex + 1 },
+                                    tableCellStyle: {
+                                        borderTop: { dashStyle: 'SOLID', width: { magnitude: 0, unit: 'PT' }, color: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+                                        borderBottom: { dashStyle: 'SOLID', width: { magnitude: 0, unit: 'PT' }, color: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+                                        borderLeft: { dashStyle: 'SOLID', width: { magnitude: 0, unit: 'PT' }, color: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+                                        borderRight: { dashStyle: 'SOLID', width: { magnitude: 0, unit: 'PT' }, color: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+                                    },
+                                    fields: 'borderTop,borderBottom,borderLeft,borderRight'
+                                }
+                            });
+
+                            currentIndex += (cellTextLengths[0] + cellTextLengths[1] + 8);
                         }
                         break;
 
@@ -225,17 +274,20 @@ function markdownToGoogleDocsRequests(jsonString, initialIndex = 1) {
 
                     case 'FAQ_BLOCK':
                         if (faqs && Array.isArray(faqs)) {
-                            for (const faq of faqs) {
-                                const qText = `Q: ${faq.question}\n`;
-                                requests.push({ insertText: { location: { index: currentIndex }, text: qText } });
-                                requests.push({
-                                    updateTextStyle: {
-                                        range: { startIndex: currentIndex, endIndex: currentIndex + qText.length },
-                                        textStyle: { bold: true },
-                                        fields: 'bold',
-                                    },
-                                });
-                                currentIndex += qText.length;
+                            for (let i = 0; i < faqs.length; i++) {
+                                const faq = faqs[i];
+
+                                // Dodajemo dodatni razmak pre prvog pitanja radi bolje čitljivosti
+                                if (i === 0) {
+                                    requests.push({ insertText: { location: { index: currentIndex }, text: '\n' } });
+                                    currentIndex += 1;
+                                }
+
+                                // Koristimo proverenu addHeading funkciju sa HEADING_4
+                                // To garantuje boldovanje i pravilan razmak jer koristi updateParagraphStyle
+                                const questionLabel = `Q: ${faq.question}`;
+                                currentIndex += addHeading(requests, questionLabel, currentIndex, 'HEADING_4');
+                                
                                 currentIndex += addParagraph(requests, faq.answer, currentIndex);
                                 requests.push({ insertText: { location: { index: currentIndex }, text: '\n' } });
                                 currentIndex += 1;
@@ -245,18 +297,71 @@ function markdownToGoogleDocsRequests(jsonString, initialIndex = 1) {
 
                     case 'SWOT_LIST_BLOCK':
                         if (swot_data) {
-                            const sections = [
-                                { label: 'Strengths', data: swot_data.strengths },
-                                { label: 'Weaknesses', data: swot_data.weaknesses },
-                                { label: 'Opportunities', data: swot_data.opportunities },
-                                { label: 'Threats', data: swot_data.threats }
-                            ];
-                            for (const section of sections) {
-                                currentIndex += addHeading(requests, section.label, currentIndex, 'HEADING_4');
-                                currentIndex += addList(requests, section.data, currentIndex);
-                                requests.push({ insertText: { location: { index: currentIndex }, text: '\n' } });
-                                currentIndex += 1;
-                            }
+                            const tableIndex = currentIndex;
+                            // 1. Insert Table 2x2
+                            requests.push({
+                                insertTable: {
+                                    rows: 2,
+                                    columns: 2,
+                                    location: { index: tableIndex }
+                                }
+                            });
+
+                            let cellTextLengths = [0, 0, 0, 0];
+
+                            // Cell 0: Strengths (Top Left) - Offset 4
+                            let c0Idx = tableIndex + 4;
+                            let l0 = addHeading(requests, 'Strengths', c0Idx, 'HEADING_4');
+                            l0 += addList(requests, swot_data.strengths, c0Idx + l0);
+                            cellTextLengths[0] = l0;
+
+                            // Cell 1: Weaknesses (Top Right) - Offset 6
+                            let c1Idx = tableIndex + 6 + cellTextLengths[0];
+                            let l1 = addHeading(requests, 'Weaknesses', c1Idx, 'HEADING_4');
+                            l1 += addList(requests, swot_data.weaknesses, c1Idx + l1);
+                            cellTextLengths[1] = l1;
+
+                            // Cell 2: Opportunities (Bottom Left) - Offset 9
+                            let c2Idx = tableIndex + 9 + cellTextLengths[0] + cellTextLengths[1];
+                            let l2 = addHeading(requests, 'Opportunities', c2Idx, 'HEADING_4');
+                            l2 += addList(requests, swot_data.opportunities, c2Idx + l2);
+                            cellTextLengths[2] = l2;
+
+                            // Cell 3: Threats (Bottom Right) - Offset 11
+                            let c3Idx = tableIndex + 11 + cellTextLengths[0] + cellTextLengths[1] + cellTextLengths[2];
+                            let l3 = addHeading(requests, 'Threats', c3Idx, 'HEADING_4');
+                            l3 += addList(requests, swot_data.threats, c3Idx + l3);
+                            cellTextLengths[3] = l3;
+
+                            // 2. Set column widths (225 PT)
+                            requests.push({
+                                updateTableColumnProperties: {
+                                    tableStartLocation: { index: tableIndex + 1 },
+                                    columnIndices: [0, 1],
+                                    tableColumnProperties: {
+                                        width: { magnitude: 225, unit: 'PT' },
+                                        widthType: 'FIXED_WIDTH'
+                                    },
+                                    fields: 'width,widthType'
+                                }
+                            });
+
+                            // 3. Make all table borders invisible
+                            requests.push({
+                                updateTableCellStyle: {
+                                    tableStartLocation: { index: tableIndex + 1 },
+                                    tableCellStyle: {
+                                        borderTop: { dashStyle: 'SOLID', width: { magnitude: 0, unit: 'PT' }, color: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+                                        borderBottom: { dashStyle: 'SOLID', width: { magnitude: 0, unit: 'PT' }, color: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+                                        borderLeft: { dashStyle: 'SOLID', width: { magnitude: 0, unit: 'PT' }, color: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+                                        borderRight: { dashStyle: 'SOLID', width: { magnitude: 0, unit: 'PT' }, color: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } } },
+                                    },
+                                    fields: 'borderTop,borderBottom,borderLeft,borderRight'
+                                }
+                            });
+
+                            const totalTextLength = cellTextLengths.reduce((acc, len) => acc + len, 0);
+                            currentIndex += (totalTextLength + 13);
                         }
                         break;
                 }

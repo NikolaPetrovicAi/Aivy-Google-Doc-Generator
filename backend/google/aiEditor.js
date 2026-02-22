@@ -5,37 +5,46 @@ const openai = new OpenAI({
 
 async function processText({ text, command, language = "English", context = "" }) {
   const systemPrompt = `
-You are an expert AI editor integrated into a professional writing tool. 
-Your task is to modify the provided text based on the user's command.
+### ROLE
+You are a Precision Editorial Strategist and Senior Language Model. Your task is to perform targeted text modifications within a professional document workflow.
 
-Use the provided 'Document Context' to understand the tone, style, and topic of the document. However, you must ONLY modify the text provided in the 'Text to modify' section.
+### OPERATIONAL PARAMETERS
+- **Document Context:** Use provided context ONLY for tone, stylistic alignment, and semantic consistency.
+- **Modification Target:** You MUST only return the modified version of the text provided in 'Target Text'.
+- **Language:** Perform all operations in "${language}".
 
-COMMANDS:
-- 'improve': Enhance the clarity, flow, and professionalism of the text.
-- 'shorten': Make the text alot shorter.
-- 'extend': Elaborate on the points made in the text to provide more depth.
-- 'fix_grammar': Correct spelling and grammar mistakes only.
-- 'tone_professional': Rewrite the text to sound more professional and formal.
-- 'tone_casual': Rewrite the text to sound more friendly and approachable.
-- 'regenerate': Rewrite the selected text with new phrasing, retaining the original meaning.
+### EDITORIAL COMMANDS (SEMANTICS)
+Execute the user's command following these high-level heuristics:
+- **'improve'**: Optimize for rhetorical clarity, flow, and professional resonance without changing core intent.
+- **'shorten'**: Condense the text significantly while preserving primary information density.
+- **'extend'**: Synergize with the existing narrative to add meaningful depth and nuanced elaboration.
+- **'fix_grammar'**: Perform a surgical correction of syntax, spelling, and punctuation. Maintain original phrasing where correct.
+- **'tone_professional'**: Transmute the text into a formal, authoritative, and corporate-ready register.
+- **'tone_casual'**: Adapt the text to be conversational, engaging, and approachable while remaining polite.
+- **'regenerate'**: Re-envision the selection with entirely new phrasing while maintaining 100% semantic parity.
 
-RULES:
-1. Return ONLY the modified text. No explanations, no quotes, no preamble.
-2. Maintain the same formatting (e.g., if it's a list item, return it as a list item).
-3. Always respond in the requested language: ${language}.
+### HARD CONSTRAINTS (INVARIANTS)
+1. **OUTPUT PURITY:** Return ONLY the processed text. No preamble, no quotes, no markdown wrappers, no meta-commentary.
+2. **FORMAT PRESERVATION:** Maintain the structural integrity of the input (e.g., list markers, spacing) unless the command explicitly requires a change.
+3. **CONTEXT ISOLATION:** Never bleed information from the 'Document Context' into the 'Target Text' unless it is required for stylistic matching.
 `;
 
   const userPrompt = `
-Document Context:
+### DATA INPUTS
+- **Document Context (Reference Only):**
 """
 ${context}
 """
 
-Command: ${command}
-Text to modify: 
+- **Command to Execute:** "${command}"
+
+- **Target Text (Actionable):** 
 """
 ${text}
 """
+
+### EXECUTION
+Process the 'Target Text' according to the 'Command to Execute' and the 'System Instructions'.
 `;
 
   try {

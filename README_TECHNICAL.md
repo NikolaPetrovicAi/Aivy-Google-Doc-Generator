@@ -1,36 +1,48 @@
 # 🚀 Aivy Workspace: High-Fidelity AI Document Engine
 
-**Aivy Workspace** is an AI-powered document editor for Google Docs designed to solve a core limitation of LLM-based writing tools: lack of structure, control, and determinism in long-form documents.
+**Aivy Workspace** is a specialized document orchestration system designed to eliminate the non-deterministic nature of LLM-generated content. Unlike traditional AI writing tools that rely on fragile free-form text parsing, Aivy implements a schema-driven workflow that enforces structural integrity through a dedicated Intermediate Representation (IR).
 
-Instead of generating free-form text, Aivy enforces a structured, schema-driven workflow where document layout is planned first and content is generated within strict architectural constraints. This enables reliable, high-fidelity document generation that integrates directly with real-world systems like the Google Docs API. 
+By leveraging OpenAI Structured Outputs and a custom index-sensitive mapping engine, the system transforms abstract AI intents into precise Google Docs API `batchUpdate` sequences. This ensures 100% layout parity and allows for complex document structures to be rendered deterministically within the Google Workspace ecosystem.
+
 
 ---
 
 ## 🌟 Key Features
 
-*   **Planner–Writer Architecture:** A two-stage generation workflow where document structure is defined before content generation, ensuring predictable long-form output and preventing structural drift.
-*   **Schema-Constrained Generation:** All AI outputs are generated under strict structural constraints, guaranteeing valid document architecture and eliminating unreliable free-form text.
-*   **Dynamic Document Blueprints:** Documents are generated from predefined structural building blocks, allowing flexible layouts while maintaining a consistent and enforceable document architecture.
-*   **Context-Scoped In-Editor AI:** An embedded AI assistant that has full document awareness for style consistency, but is constrained to modify only the user-selected range—preventing unintended global edits.
+*   **Asynchronous Planner–Writer Pipeline** The system decouples document architecture from content synthesis. The Planner (`aiPlanner.js`) performs context-aware block selection (Business vs. Non-Business logic), organizing "Small" and "Large" logical templates into a paginated blueprint. The Writer (`aiWriter.js`) then populates these templates, adhering to strict heuristic constraints (e.g., maximum item limits per list) to ensure visual consistency and professional document density.
+
+*   **Deterministic Generation via OpenAI Structured Outputs:** Aivy leverages OpenAI Structured Outputs with strict JSON schemas (strict: true) to ensure the LLM output is 100% compliant with the application's internal data model. This approach eliminates the need for heuristic-based parsing and allows for the direct transformation of JSON data into hierarchical Google Docs elements, guaranteeing valid document structures for every generation.
+
+*   **Context-Aware Editing with State-Isolated Streaming:** The in-editor AI assistant (aiEditor.js) performs range-restricted modifications by analyzing the full document context for style and tone consistency, while strictly limiting edits to the user-selected text. To maintain a responsive 60FPS experience, the system uses a state isolation strategy: streaming updates are injected directly into the ProseMirror state, bypassing React's reconciliation cycle during active generation. Global state synchronization is deferred until the stream is complete, preventing UI lag.
+
 
 ---
 
 ## 🛠 Engineering Challenges & Solutions
 
-### 1. Deterministic AI → Document Structure Mapping
-**Problem:** Free-form AI outputs are difficult to reliably map onto the strictly hierarchical and index-sensitive Google Docs API, often resulting in malformed documents or fragile post-processing logic.
+### 1. Structured AI-to-Document Mapping via JSON Schemas
+**Problem:** Mapping non-deterministic LLM outputs to the strictly indexed Google Docs API often results in structural failures or malformed documents due to unpredictable AI-generated syntax.
 
-**Solution:** Introduced a schema-constrained intermediate representation between the LLM and the Google Docs API. Using OpenAI Structured Outputs, the model is forced to generate a strictly typed document blueprint, guaranteeing structural validity before any API-level rendering occurs. This enables deterministic conversion from AI output into complex Google Docs update sequences without heuristic parsing.
+**Solution:** Implemented a dedicated Intermediate Representation (IR) layer leveraging OpenAI Structured Outputs with strict: true. This architecture forces the LLM to generate a sequence of typed block-primitives (e.g., STATS_ROW_BLOCK, SWOT_LIST_BLOCK) that map directly to pre-defined batchUpdate request sequences. By validating AI outputs against a strict JSON schema, the system ensures that all generated content is structurally compliant with the Google Docs API requirements before any document modification begins.
 
-### 2. HTML ↔ Google Docs Rendering Parity
-**Problem:** Achieving visual consistency between a browser-based rich-text editor and Google Docs is non-trivial due to fundamentally different rendering models and Google Docs’ implicit style inheritance behavior.
+### 2. High-Fidelity Rendering & Style Inheritance Control
+**Problem:** Achieving visual parity between a browser-based DOM and the linear, index-sensitive Google Docs API is difficult due to the API's implicit style inheritance model, where new paragraphs automatically carry over formatting from preceding blocks.
 
-**Solution:** Built a custom style translation layer that explicitly controls formatting order and overrides default inheritance rules. The system enforces deterministic spacing, indentation, and line breaks. For advanced alignment scenarios, list markers are rendered via calculated visual counters rather than native HTML lists, enabling precise left, center, and right alignment that matches Google Docs’ layout behavior.
+**Solution:** Developed an Explicit Style Translation layer utilizing a two-phase rendering algorithm. The first phase performs a recursive DOM traversal to map HTML nodes into a linear, index-aware array. The second phase executes a Priority-Based Operation Sequence: it performs an Atomic Style Cleanup of inherited properties (using targeted delete requests) before applying new formatting. This ensures precise control over indentation, alignment, and spacing, guaranteeing that the final document matches the editor's layout deterministically.
 
-### 3. High-Performance AI Streaming in Rich-Text
-**Problem:** Streaming AI-generated text directly into a rich-text editor caused excessive re-rendering and degraded performance, particularly during long generation sessions.
+### 3. State-Isolated Streaming & Performance Optimization
+**Problem:** Streaming AI-generated text directly into a React-based rich-text editor at high frequencies triggers massive reconciliation cycles, leading to UI "choking," input lag, and a degraded 60FPS user experience.
 
-**Solution:** Implemented a state isolation strategy where streaming updates are applied directly to the editor’s internal ProseMirror state, while React-level state synchronization occurs only after the stream completes. This allows smooth real-time generation without blocking the UI or triggering unnecessary re-renders.
+**Solution:** Implemented a State Isolation strategy within the Tiptap/ProseMirror environment. During active AI generation, the system bypasses the global React state update cycle (onPageUpdate). Instead, incoming text chunks are injected directly into the editor’s internal ProseMirror state. Global state synchronization and "de-buffering" (flush) only occur once the stream is closed. This architecture drastically reduces the number of re-renders, maintaining a highly responsive UI even during long-form content generation.
+
+---
+
+## 🧠 AI Logic & Prompt Engineering
+Aivy Workspace utilizes modularized AI engines for different document lifecycle stages. You can review the prompt engineering and JSON schemas in the following backend files:
+
+- **Document Planner (backend/google/aiPlanner.js):** Orchestrates initial blueprinting and block selection based on domain context.
+- **Structured Writer (backend/google/aiWriter.js):** Uses OpenAI Structured Outputs to populate templates while enforcing strict visual density constraints.
+- **Contextual Editor (backend/google/aiEditor.js):** Performs range-restricted transformations, analyzing full document context to maintain style consistency.
 
 ---
 
@@ -68,10 +80,3 @@ Instead of generating free-form text, Aivy enforces a structured, schema-driven 
    - **Backend:** `cd backend && node index.js`
    - **Frontend:** `cd frontend && npm run dev`
 4. **Authenticate:** Visit `http://localhost:3000`. The application will automatically redirect you to the Google login page to link your account.
-
----
-
-## 🔮 Future Improvements
-- **Project-Scoped Contextual Intelligence:** Introduce project-level context where related documents are grouped and indexed together, enabling the AI to perform cross-document reasoning, edits, and queries within a bounded knowledge space.
-- **Automated Consistency & Quality Checks:** Add a secondary review phase that evaluates generated content for structural consistency, formatting correctness, and logical coherence before final insertion, reducing error propagation in long-form documents.
-- **Automated Consistency & Quality Checks:** Add a secondary review phase that evaluates generated content for structural consistency, formatting correctness, and logical coherence before final insertion, reducing error propagation in long-form documents.
