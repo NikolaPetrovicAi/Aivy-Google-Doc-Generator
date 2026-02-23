@@ -39,7 +39,6 @@ export default function DocEditorPage() {
   const editorRefs = useRef<Record<string, Editor | null>>({});
   const pageRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const initialFocusDone = useRef(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
 
@@ -92,20 +91,6 @@ export default function DocEditorPage() {
     fetchDocument();
   }, [id, paginateContent]);
 
-  // Effect to focus the first editor when content is loaded
-  useEffect(() => {
-    if (!isLoading && editablePages.length > 0 && !initialFocusDone.current) {
-      const firstPageId = editablePages[0].id;
-      if (editorRefs.current[firstPageId]) {
-        const timer = setTimeout(() => {
-            editorRefs.current[firstPageId]?.commands.focus();
-            initialFocusDone.current = true;
-          }, 100);
-          return () => clearTimeout(timer);
-      }
-    }
-  }, [isLoading, editablePages]);
-  
   // Effect to focus the title input when it appears
   useEffect(() => {
     if (isEditingTitle && titleInputRef.current) {

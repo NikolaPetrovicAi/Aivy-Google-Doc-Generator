@@ -1,4 +1,4 @@
-// google/markdownTranslator.js
+// converters/aiToGoogleDocs.js
 
 /**
  * Helper to add a heading to the requests.
@@ -67,7 +67,7 @@ function addList(requests, items, index, bulletPreset = 'BULLET_DISC_CIRCLE_SQUA
 /**
  * Converts a JSON object representing a page with multiple blocks into Google Docs API requests.
  */
-function markdownToGoogleDocsRequests(jsonString, initialIndex = 1) {
+function aiToGoogleDocsRequests(jsonString, initialIndex = 1) {
     let requests = [];
     let currentIndex = initialIndex;
 
@@ -78,13 +78,13 @@ function markdownToGoogleDocsRequests(jsonString, initialIndex = 1) {
         // 1. Add Page Title
         if (page_title) {
             currentIndex += addHeading(requests, page_title, currentIndex, 'HEADING_2');
-            requests.push({ insertText: { location: { index: currentIndex }, text: '\n' } });
-            currentIndex += 1;
+            // UKLONJEN suvišan newline ovde
         }
 
         // 2. Iterate through blocks
         if (blocks && Array.isArray(blocks)) {
-            for (const block of blocks) {
+            for (let i = 0; i < blocks.length; i++) {
+                const block = blocks[i];
                 const { type, title, content, list_items, faqs, swot_data } = block;
 
                 // Add Block Title (Heading 3)
@@ -184,20 +184,6 @@ function markdownToGoogleDocsRequests(jsonString, initialIndex = 1) {
                                 }
                             });
                             
-                            // Each cell in a new table initially has one empty paragraph (1 character: \n)
-                            // According to documentation, a newline is inserted BEFORE the table.
-                            // Indices relative to tableIndex:
-                            // tableIndex: \n (auto-inserted)
-                            // tableIndex + 1: [TS] (Table Start)
-                            // tableIndex + 2: [RS] (Row Start)
-                            // tableIndex + 3: [CS] (Cell 1 Start)
-                            // tableIndex + 4: [Cell 1 Content Start]
-                            
-                            // 1x3 table structure discovered indices:
-                            // Table Start (TS), Row Start (RS), Cell Start (CS), Cell Content (\n), Cell Boundary (CB), Cell End (CE), Row End (RE), Table End (TE)
-                            // Empty: [TS][RS][CS0][\n][CS1][\n][CS2][\n][RE][TE]
-                            // Indices relative to tableIndex (if tableIndex is 1 and auto-newline at 1 exists):
-                            // 2:TS, 3:RS, 4:CS0, 5:\n, 6:CS1, 7:\n, 8:CS2, 9:\n, 10:RE, 11:TE
                             let cellOffsets = [4, 6, 8];
                             for (let i = 0; i < 3; i++) {
                                 const stat = block.stats[i];
@@ -264,9 +250,6 @@ function markdownToGoogleDocsRequests(jsonString, initialIndex = 1) {
                                 }
                             });
                             
-                            // Total structural overhead: 10
-                            // Reverted to 10. The previous increase to 11 caused "Index must be less than end index" error.
-                            // 10 matches the correct insertion point (before the final newline).
                             const totalTextLength = block.stats.reduce((acc, s) => acc + s.value.length + s.label.length + 1, 0);
                             currentIndex += (totalTextLength + 10);
                         }
@@ -277,20 +260,21 @@ function markdownToGoogleDocsRequests(jsonString, initialIndex = 1) {
                             for (let i = 0; i < faqs.length; i++) {
                                 const faq = faqs[i];
 
-                                // Dodajemo dodatni razmak pre prvog pitanja radi bolje čitljivosti
                                 if (i === 0) {
                                     requests.push({ insertText: { location: { index: currentIndex }, text: '\n' } });
                                     currentIndex += 1;
                                 }
 
-                                // Koristimo proverenu addHeading funkciju sa HEADING_4
-                                // To garantuje boldovanje i pravilan razmak jer koristi updateParagraphStyle
                                 const questionLabel = `Q: ${faq.question}`;
                                 currentIndex += addHeading(requests, questionLabel, currentIndex, 'HEADING_4');
                                 
                                 currentIndex += addParagraph(requests, faq.answer, currentIndex);
-                                requests.push({ insertText: { location: { index: currentIndex }, text: '\n' } });
-                                currentIndex += 1;
+                                
+                                // Samo ako nije poslednji FAQ, dodajemo prazan red radi razmaka
+                                if (i < faqs.length - 1) {
+                                    requests.push({ insertText: { location: { index: currentIndex }, text: '\n' } });
+                                    currentIndex += 1;
+                                }
                             }
                         }
                         break;
@@ -316,21 +300,21 @@ function markdownToGoogleDocsRequests(jsonString, initialIndex = 1) {
                             cellTextLengths[0] = l0;
 
                             // Cell 1: Weaknesses (Top Right) - Offset 6
-                            let c1Idx = tableIndex + 6 + cellTextLengths[0];
-                            let l1 = addHeading(requests, 'Weaknesses', c1Idx, 'HEADING_4');
-                            l1 += addList(requests, swot_data.weaknesses, c1Idx + l1);
+                            let l1Idx = tableIndex + 6 + cellTextLengths[0];
+                            let l1 = addHeading(requests, 'Weaknesses', l1Idx, 'HEADING_4');
+                            l1 += addList(requests, swot_data.weaknesses, l1Idx + l1);
                             cellTextLengths[1] = l1;
 
                             // Cell 2: Opportunities (Bottom Left) - Offset 9
-                            let c2Idx = tableIndex + 9 + cellTextLengths[0] + cellTextLengths[1];
-                            let l2 = addHeading(requests, 'Opportunities', c2Idx, 'HEADING_4');
-                            l2 += addList(requests, swot_data.opportunities, c2Idx + l2);
+                            let l2Idx = tableIndex + 9 + cellTextLengths[0] + cellTextLengths[1];
+                            let l2 = addHeading(requests, 'Opportunities', l2Idx, 'HEADING_4');
+                            l2 += addList(requests, swot_data.opportunities, l2Idx + l2);
                             cellTextLengths[2] = l2;
 
                             // Cell 3: Threats (Bottom Right) - Offset 11
-                            let c3Idx = tableIndex + 11 + cellTextLengths[0] + cellTextLengths[1] + cellTextLengths[2];
-                            let l3 = addHeading(requests, 'Threats', c3Idx, 'HEADING_4');
-                            l3 += addList(requests, swot_data.threats, c3Idx + l3);
+                            let l3Idx = tableIndex + 11 + cellTextLengths[0] + cellTextLengths[1] + cellTextLengths[2];
+                            let l3 = addHeading(requests, 'Threats', l3Idx, 'HEADING_4');
+                            l3 += addList(requests, swot_data.threats, l3Idx + l3);
                             cellTextLengths[3] = l3;
 
                             // 2. Set column widths (225 PT)
@@ -366,9 +350,11 @@ function markdownToGoogleDocsRequests(jsonString, initialIndex = 1) {
                         break;
                 }
 
-                // Add spacing between blocks
-                requests.push({ insertText: { location: { index: currentIndex }, text: '\n' } });
-                currentIndex += 1;
+                // Add spacing between blocks, but NOT after the last block of the page
+                if (i < blocks.length - 1) {
+                    requests.push({ insertText: { location: { index: currentIndex }, text: '\n' } });
+                    currentIndex += 1;
+                }
             }
         }
     } catch (error) {
@@ -381,4 +367,4 @@ function markdownToGoogleDocsRequests(jsonString, initialIndex = 1) {
     return { requests, endIndex: currentIndex };
 }
 
-module.exports = { markdownToGoogleDocsRequests };
+module.exports = { aiToGoogleDocsRequests };

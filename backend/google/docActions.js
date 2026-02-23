@@ -1,6 +1,6 @@
 // backend/google/docActions.js
 const { google } = require("googleapis");
-const { htmlToGoogleDocsRequests } = require("./htmlToGoogleDocsRequests.js");
+const { htmlToGoogleDocsRequests } = require("../converters/htmlToGoogleDocsRequests.js");
 
 async function updateGoogleDocContent(authClient, documentId, htmlContent, title) {
     const docs = google.docs({ version: "v1", auth: authClient });

@@ -10,8 +10,7 @@ Instead of free-form text generation, Aivy enforces a plan-first, schema-constra
 ## 🌟 Key Features
 
 *   **Plan-First Generation:** Document structure is defined before content generation, preventing structural drift in long-form documents.
-*   **Schema-Constrained Generation:** AI outputs are generated under strict structural constraints, ensuring valid and enforceable document architecture.
-*   **Dynamic Document Blueprints:** Documents are generated from predefined structural building blocks, allowing flexible layouts while maintaining a consistent and enforceable document architecture.
+*   **Schema-Driven Blueprints:** Documents are generated from predefined structural building blocks under strict constraints, ensuring flexible layouts while maintaining a predictable and enforceable document architecture.
 *   **Context-Aware In-Editor AI:** The in-editor AI has access to the full document context for coherence and style consistency, but is strictly limited to modifying only the user-selected range.
 
 ---

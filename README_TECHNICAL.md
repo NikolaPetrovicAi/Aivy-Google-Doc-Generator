@@ -40,9 +40,9 @@ By leveraging OpenAI Structured Outputs and a custom index-sensitive mapping eng
 ## 🧠 AI Logic & Prompt Engineering
 Aivy Workspace utilizes modularized AI engines for different document lifecycle stages. You can review the prompt engineering and JSON schemas in the following backend files:
 
-- **Document Planner (backend/google/aiPlanner.js):** Orchestrates initial blueprinting and block selection based on domain context.
-- **Structured Writer (backend/google/aiWriter.js):** Uses OpenAI Structured Outputs to populate templates while enforcing strict visual density constraints.
-- **Contextual Editor (backend/google/aiEditor.js):** Performs range-restricted transformations, analyzing full document context to maintain style consistency.
+- **Document Planner (backend/ai/aiPlanner.js):** Orchestrates initial blueprinting and block selection based on domain context.
+- **Structured Writer (backend/ai/aiWriter.js):** Uses OpenAI Structured Outputs to populate templates while enforcing strict visual density constraints.
+- **Contextual Editor (backend/ai/aiEditor.js):** Performs range-restricted transformations, analyzing full document context to maintain style consistency.
 
 ---
 

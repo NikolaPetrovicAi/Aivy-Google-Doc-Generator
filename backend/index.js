@@ -9,8 +9,8 @@ const { google } = require("googleapis");
 const axios = require("axios");
 
 const { router: docsRouter, createGoogleDocFromPlan, createGoogleDoc } = require("./google/docs.js");
-const { generatePlan } = require("./google/aiPlanner.js");
-const { processText } = require("./google/aiEditor.js");
+const { generatePlan } = require("./ai/aiPlanner.js");
+const { processText } = require("./ai/aiEditor.js");
 
 
 const app = express();

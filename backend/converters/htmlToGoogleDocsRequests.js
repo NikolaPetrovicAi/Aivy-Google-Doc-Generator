@@ -455,27 +455,30 @@ function htmlToGoogleDocsRequests(htmlContent, baseStartIndex = 1) {
                 });
 
                 const tableIndex = tableStartIndex + 1;
-                let totalCellTextLength = 0;
-
-                if (rows === 1 && cols === 3) {
-                    let currentCellOffset = 3;
-                    for (let r = 0; r < rows; r++) {
-                        for (let c = 0; c < cols; c++) {
-                            const cell = block.rows[r][c];
-                            const cellIndex = tableIndex + currentCellOffset;
-                            
-                            const cellResultIndex = generateRequestsForBlocks(cell.blocks, cellIndex);
-                            const cellTextLength = cellResultIndex - cellIndex;
-                            
-                            totalCellTextLength += cellTextLength;
-                            currentCellOffset += cellTextLength + 2;
+                
+                // Generic cell processing for any table dimensions
+                let currentCellIndex = tableStartIndex + 4;
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const cell = block.rows[r][c];
+                        const cellResultIndex = generateRequestsForBlocks(cell.blocks, currentCellIndex);
+                        const cellTextLength = cellResultIndex - currentCellIndex;
+                        
+                        // Structural character offsets between cells and rows:
+                        // - Between cells in same row: [Cell End][Cell Start] = 2 chars
+                        // - Between last cell of row and first cell of next row: [Cell End][Row End][Row Start][Cell Start] = 3 chars (adjusted for Google Docs API behavior)
+                        // - At the end of the table: [Cell End][Row End][Table End] = 2 chars (adjusted)
+                        if (c < cols - 1) {
+                            currentCellIndex += cellTextLength + 2;
+                        } else if (r < rows - 1) {
+                            currentCellIndex += cellTextLength + 3;
+                        } else {
+                            currentCellIndex += cellTextLength + 2;
                         }
                     }
-                    localIndex = tableStartIndex + 10 + totalCellTextLength;
-                } else {
-                    localIndex += (rows * cols * 2) + 5; 
                 }
-
+                
+                localIndex = currentCellIndex;
                 tableSeqBlock.endIndex = localIndex;
 
                 const styleAttr = block.node.getAttribute('style') || '';

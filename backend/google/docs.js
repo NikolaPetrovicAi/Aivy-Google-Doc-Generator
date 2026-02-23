@@ -8,11 +8,11 @@ const { requireAuth } = require("../middleware/auth");
 // ========== AI INTEGRATION ========== 
 const OpenAI = require("openai");
 
-const { generatePlan } = require("./aiPlanner");
-const { generatePage } = require("./aiWriter");
-const { markdownToGoogleDocsRequests } = require("./markdownTranslator.js");
-const { googleDocsToHtml } = require("./formatConverter.js");
-const { htmlToGoogleDocsRequests } = require("./htmlToGoogleDocsRequests.js");
+const { generatePlan } = require("../ai/aiPlanner.js");
+const { generatePage } = require("../ai/aiWriter.js");
+const { aiToGoogleDocsRequests } = require("../converters/aiToGoogleDocs.js");
+const { googleDocsToHtml } = require("../converters/googleDocsToHtml.js");
+const { htmlToGoogleDocsRequests } = require("../converters/htmlToGoogleDocsRequests.js");
 const { updateGoogleDocContent } = require("./docActions.js");
 
 const openai = new OpenAI({
@@ -203,8 +203,8 @@ async function createGoogleDocFromPlan(authClient, plan, formData) {
       language: language,
     });
     
-    // Translate markdown to Google Docs requests
-    const { requests, endIndex } = markdownToGoogleDocsRequests(pageContent, currentIndex);
+    // Translate page content to Google Docs requests
+    const { requests, endIndex } = aiToGoogleDocsRequests(pageContent, currentIndex);
     if (requests.length > 0) {
       allRequests.push(...requests);
       currentIndex = endIndex;
